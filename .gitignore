@@ -1,0 +1,16 @@
+node_modules/
+desktop/dist/
+data/
+.DS_Store
+
+src-tauri/target/
+artifacts/
+
+# 本机验收材料与自动生成文件
+design/
+design-qa.md
+src-tauri/gen/
+.env
+.env.*
+!.env.example
+*.log

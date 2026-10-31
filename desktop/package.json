@@ -1,0 +1,72 @@
+{
+  "name": "lingjing-music-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "聆境音乐桌面播放器",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win --x64"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.lingjing.music",
+    "productName": "聆境音乐",
+    "asar": false,
+    "files": [
+      "main.js",
+      "!node_modules/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "../server.js",
+        "to": "app/server.js"
+      },
+      {
+        "from": "../lib",
+        "to": "app/lib"
+      },
+      {
+        "from": "../public",
+        "to": "app/public"
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.music",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "build/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "聆境音乐"
+    }
+  }
+}

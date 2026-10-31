@@ -1,0 +1,17 @@
+{
+  "name": "lingjing-music",
+  "version": "0.1.0",
+  "private": true,
+  "description": "聆境音乐 · 轻量桌面播放器",
+  "scripts": {
+    "desktop": "tauri dev",
+    "build": "tauri build",
+    "dist:mac": "tauri build --bundles app,dmg",
+    "dist:win": "tauri build --bundles nsis",
+    "legacy": "node server.js",
+    "test": "node --test tests/native-bridge.test.cjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

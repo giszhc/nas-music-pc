@@ -1,0 +1,81 @@
+/* 仅替换截图指定的顶部、侧栏；内容区与播放器沿用原系统结构。 */
+.sidebar { padding: 22px 16px 16px; gap: 0; }
+.platform-macos .sidebar { padding-top: 38px; }
+.sidebar .brand, .is-electron .sidebar .brand { height: auto; padding: 0; margin: 5px 0 24px; }
+.shell-profile { display: flex; align-items: center; gap: 9px; width: 100%; padding: 0; border: 0; background: none; color: var(--ink); text-align: left; }
+.shell-profile img { flex: none; object-fit: contain; }
+.shell-profile-copy { flex: 1; min-width: 0; display: grid; gap: 4px; }
+.shell-profile-copy b { font-size: 15px; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.shell-profile-copy small { color: var(--ink-3); font-size: 10px; }
+.shell-profile > svg { color: var(--ink-4); transform: rotate(90deg); flex: none; }
+.shell-quicknav { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.shell-tile { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 58px; border: 0; border-radius: 10px; background: var(--soft); color: var(--ink-3); font-size: 11px; }
+.shell-tile svg { flex: none; }
+.shell-tile:hover, .shell-tile.active { background: var(--soft-2); color: var(--brand); }
+.shell-add { display: grid; place-items: center; height: 28px; margin: 10px 0 25px; border: 1px dashed var(--line-2); border-radius: 8px; background: none; color: var(--ink-4); }
+.shell-add:hover { color: var(--brand); border-color: var(--brand); }
+.shell-library { display: grid; gap: 6px; }
+.shell-link { display: flex; align-items: center; gap: 12px; min-height: 42px; width: 100%; padding: 0 10px; text-align: left; border: 0; border-radius: 9px; background: none; color: var(--ink-2); font-size: 13px; }
+.shell-link svg { flex: none; }
+.shell-link small { margin-left: auto; color: var(--ink-4); font-size: 11px; }
+.shell-link:hover, .shell-link.active, .shell-source:hover, .shell-source.active { background: var(--soft); }
+.shell-link.active { color: var(--brand); }
+.shell-section-label { display: flex; align-items: center; justify-content: space-between; margin: 25px 8px 9px; color: var(--ink-3); font-size: 11px; }
+.shell-section-label button { display: grid; place-items: center; padding: 2px; border: 0; color: var(--ink-4); background: none; }
+.shell-sources { display: grid; gap: 5px; }
+.shell-source { display: flex; align-items: center; gap: 10px; min-height: 44px; width: 100%; padding: 5px 8px; border: 0; background: none; border-radius: 10px; color: var(--ink-2); font-size: 12px; text-align: left; }
+.shell-source > span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shell-source-icon { flex: none; display: grid; place-items: center; width: 30px; height: 30px; background: var(--soft); border-radius: 5px; color: var(--ink-3); }
+.shell-no-source { margin: 8px; color: var(--ink-4); font-size: 11px; line-height: 1.7; }
+.shell-footer { display: flex; align-items: center; gap: 12px; margin-top: auto; padding: 28px 5px 0; }
+.shell-footer-button { display: grid; place-items: center; width: 25px; height: 28px; padding: 0; border: 0; background: none; color: var(--ink-3); border-radius: 6px; }
+.shell-footer-button:hover, .shell-footer-button.active { color: var(--brand); background: var(--soft); }
+.shell-footer > span { margin-left: auto; color: var(--ink-4); font-size: 10px; }
+.topbar { gap: 18px; padding-inline: 20px; }
+.shell-history { display: flex; flex: none; align-items: center; gap: 12px; }
+.shell-history-button { display: grid; place-items: center; width: 22px; height: 34px; padding: 0; border: 0; background: none; color: var(--ink-2); border-radius: 5px; }
+.shell-history-button:hover { color: var(--brand); background: var(--soft); }
+.topbar .search { flex: 0 1 340px; height: 38px; border-radius: 10px; box-shadow: none; border: 0; }
+.topbar .toolbar { gap: 8px; }
+.topbar .tool { min-width: 30px; width: 30px; height: 34px; border-radius: 7px; }
+.topbar .tool span { display: none; }
+.topbar .tool svg { width: 19px; height: 19px; }
+.sidebar button:focus-visible, .shell-history-button:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+:root[data-theme="light"] {
+  --bg: #fff; --side: #fff; --surface: #fff; --surface-2: #f7f7f7;
+  --ink: #202020; --ink-2: #414141; --ink-3: #686868; --ink-4: #737373;
+  --line: #ededed; --line-2: #d9d9d9; --soft: #f5f5f5; --soft-2: #ededed;
+  --wallpaper: #fff; --glass: #fff; --glass-dense: #fff; --glass-control: #f7f7f7; --glass-hover: #f1f1f1;
+  --topbar-search: #f2f2f2; --topbar-tool-hover: #f0f0f0;
+  --glass-shadow: none; --glass-rim: none; --glass-highlight: #fff; --glass-edge: #fff;
+  --pp-bg-from: #fff; --pp-bg-to: #fff; --pp-card: #fff; --showcase-rgb: 255,255,255;
+}
+:root[data-theme="light"] .app, :root[data-theme="light"] .main, :root[data-theme="light"] .sidebar, :root[data-theme="light"] .topbar { background: #fff; }
+:root[data-theme="light"] .sidebar { backdrop-filter: none; -webkit-backdrop-filter: none; box-shadow: inset -1px 0 0 #f1f1f1; }
+:root[data-theme="light"] .topbar::before { display: none; }
+:root[data-theme="light"] .topbar .search { background: #f1f1f1; }
+:root[data-theme="light"] .mtr.head::before { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+:root[data-theme="light"] .mini-bar { background: #fff; box-shadow: 0 0 0 1px #ededed, 0 5px 20px rgba(0,0,0,.045); }
+:root[data-theme="light"] .mini-bar::before { background: #fff; backdrop-filter: none; -webkit-backdrop-filter: none; }
+:root[data-theme="light"] .page-audio { background: #fff; }
+:root[data-theme="light"] .page-audio::after { background: none; }
+:root[data-theme="light"] .page-audio .ap-bg { opacity: 0; }
+@media (max-width: 960px) { .topbar { padding-inline: 14px; gap: 10px; } .shell-history { gap: 6px; } .topbar .search { flex: 1 1 120px; min-width: 0; } .topbar .toolbar { gap: 3px; } }
+/* 沿用原系统在最小桌面宽度的图标侧栏，避免新增文字挤成竖排。 */
+@media (max-width: 860px) {
+  .sidebar { padding-left: 8px; padding-right: 8px; }
+  .sidebar .brand { width: 100%; margin: 5px 0 16px; }
+  .shell-profile { justify-content: center; }
+  .shell-profile img { width: 32px; height: 32px; }
+  .shell-profile-copy, .shell-profile > svg, .shell-tile span, .shell-link span, .shell-link small, .shell-section-label > span, .shell-source > span:last-child, .shell-footer > span, .shell-no-source { display: none; }
+  .shell-quicknav, .shell-add, .shell-library, .shell-sources, .shell-section-label, .shell-footer { width: 100%; }
+  .shell-quicknav { grid-template-columns: 1fr; gap: 6px; }
+  .shell-tile { min-height: 40px; }
+  .shell-add { margin: 8px 0 12px; }
+  .shell-link { justify-content: center; padding: 0; gap: 0; }
+  .shell-section-label { justify-content: center; margin: 10px 0 5px; }
+  .shell-section-label button { min-height: 24px; }
+  .shell-source { justify-content: center; min-height: 40px; padding: 4px; }
+  .shell-source-icon { width: 28px; height: 28px; }
+  .shell-footer { flex-direction: column; gap: 8px; padding-top: 14px; }
+}

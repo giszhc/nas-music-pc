@@ -1,0 +1,10 @@
+/* 只提供无边框窗口控件，音乐模块继续沿用原系统样式。 */
+.window-controls { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; margin-left: 2px; }
+.window-control { display: grid; place-items: center; width: 36px; height: 34px; padding: 0; border: 0; border-radius: 0; color: var(--ink-3); background: transparent; cursor: pointer; }
+.window-control svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.25; }
+.window-control:hover { background: var(--topbar-tool-hover); color: var(--ink); }
+.window-control:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+.window-close:hover { background: #c93434; color: #fff; }
+
+/* 移除筛选与历史后，本机目录成为第三项，窄窗口仍保留该入口。 */
+.toolbar .tool[data-act="local"] { display: flex; }
