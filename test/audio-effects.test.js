@@ -63,7 +63,7 @@ test('不支持音效时退回原声并同步界面和存储', async () => {
   assert.equal(s.storage.get('yunying.audio-effect'), 'off');
 });
 
-test('原声频谱读取真实频段数据，暂停取消刷新并回落，静音无起伏', async () => {
+test('原声频谱读取真实频段数据，暂停冻结最后一帧，静音无起伏', async () => {
   const s = setup('off', true, true);
   await s.audioEvents.play();
   assert.equal(s.contexts.length, 1);
@@ -75,8 +75,11 @@ test('原声频谱读取真实频段数据，暂停取消刷新并回落，静�
   assert.ok(s.bars.every(bar => bar[2] <= 2.5));
   assert.ok(s.bars.some(bar => bar[3] > 10));
   assert.ok(s.bars.some(bar => bar[3] === 2));
+  const lastFrame = s.bars.map(bar => bar.slice());
   s.audio.paused = true; s.audioEvents.pause();
   assert.equal(s.frames.size, 0);
+  assert.deepEqual(s.bars, lastFrame);
+  s.audioEvents.emptied();
   assert.ok(s.bars.every(bar => bar[3] === 2));
   s.audio.paused = false; s.audio.muted = true;
   s.audioEvents.playing(); tick(200);

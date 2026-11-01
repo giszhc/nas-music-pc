@@ -15,16 +15,18 @@
         "height": 800,
         "minWidth": 860,
         "minHeight": 600,
-        "decorations": true
+        "decorations": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' asset: http://asset.localhost data: blob:; media-src 'self' asset: http://asset.localhost nas: http://nas.localhost blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost nas: http://nas.localhost",
+      "csp": "default-src 'self'; img-src 'self' https: http: asset: http://asset.localhost data: blob:; media-src 'self' https: http: asset: http://asset.localhost nas: http://nas.localhost blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self' ipc: http://ipc.localhost asset: http://asset.localhost nas: http://nas.localhost",
       "assetProtocol": {
         "enable": true,
         "scope": []
       }
-    }
+    },
+    "macOSPrivateApi": true
   },
   "bundle": {
     "active": true,

@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod music_match;
 mod nas;
+mod online;
 use lofty::{
     file::{AudioFile, TaggedFileExt},
     tag::Accessor,
@@ -385,8 +386,53 @@ fn remove_source(app: tauri::AppHandle, path: String) -> Result<Library, String>
     *state.library.lock().unwrap() = lib.clone();
     Ok(lib)
 }
+#[tauri::command]
+fn tray_action(app: tauri::AppHandle, action: String) {
+    if action == "quit" { app.exit(0); return; }
+    if let Some(window) = app.get_webview_window("main") {
+        if action == "show" { let _ = window.show(); let _ = window.set_focus(); }
+        else if ["previous", "toggle", "next"].contains(&action.as_str()) {
+            let _ = app.emit_to("main", "tray-playback", action);
+        }
+    }
+}
+#[tauri::command]
+fn update_tray(app: tauri::AppHandle, title: String, playing: bool, theme: String, accent: String) {
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        if let Some(tray) = handle.tray_by_id("player") {
+            let _ = tray.set_tooltip(Some(title.clone()));
+        }
+        if let Some(window) = handle.get_webview_window("tray-player") {
+            let value = serde_json::json!({"title": title, "playing": playing, "theme": theme, "accent": accent});
+            let _ = window.eval(format!("window.updatePlayer({value})"));
+        }
+    });
+}
+fn tray_icon() -> tauri::image::Image<'static> {
+    // Small, antialiased rounded music mark, independent of the square bundle icon.
+    let size = 64u32;
+    let mut pixels = vec![0u8; (size * size * 4) as usize];
+    for y in 0..size { for x in 0..size {
+        let mut coverage = 0u32;
+        for sy in 0..4 { for sx in 0..4 {
+            let px = x as f32 + (sx as f32 + 0.5) / 4.0;
+            let py = y as f32 + (sy as f32 + 0.5) / 4.0;
+            let dx = (px - 32.0).abs() - 18.0;
+            let dy = (py - 32.0).abs() - 18.0;
+            if dx.max(0.0).hypot(dy.max(0.0)) < 12.0 { coverage += 1; }
+        }}
+        let note = (x >= 30 && x <= 36 && y >= 17 && y <= 44)
+            || (x >= 34 && x <= 47 && y >= 17 && y <= 23)
+            || (((x as f32 - 25.0)/10.0).powi(2) + ((y as f32 - 44.0)/7.0).powi(2) <= 1.0);
+        let i = ((y * size + x) * 4) as usize;
+        pixels[i..i+4].copy_from_slice(&[if note {255} else {24}, if note {255} else {148}, if note {255} else {214}, (coverage * 255 / 16) as u8]);
+    }}
+    tauri::image::Image::new_owned(pixels, size, size)
+}
 fn main() {
     tauri::Builder::default()
+        .enable_macos_default_menu(false)
         .manage(State {
             library: Mutex::new(Library::default()),
             busy: Mutex::new(false),
@@ -398,7 +444,40 @@ fn main() {
                 responder.respond(nas::stream(&app, request));
             });
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                api.prevent_close();
+                let _ = window.hide();
+            }
+            if window.label() == "tray-player" {
+                if let tauri::WindowEvent::Focused(false) = event { let _ = window.hide(); }
+            }
+        })
         .setup(|app| {
+            tauri::WebviewWindowBuilder::new(app, "tray-player", tauri::WebviewUrl::App("tray.html".into()))
+                .title("聆境音乐播放控制").inner_size(320.0, 220.0)
+                .transparent(true)
+                .effects(tauri::utils::config::WindowEffectsConfig {
+                    effects: vec![tauri::utils::WindowEffect::HudWindow],
+                    state: Some(tauri::utils::WindowEffectState::Active),
+                    radius: Some(20.0), ..Default::default()
+                })
+                .decorations(false).resizable(false).always_on_top(true).skip_taskbar(true).visible(false).build()?;
+            tauri::tray::TrayIconBuilder::with_id("player")
+                .icon(tray_icon())
+                .tooltip("聆境音乐").on_tray_icon_event(|tray, event| {
+                    if let tauri::tray::TrayIconEvent::Click { position, button_state: tauri::tray::MouseButtonState::Up, .. } = event {
+                        if let Some(window) = tray.app_handle().get_webview_window("tray-player") {
+                            if window.is_visible().unwrap_or(false) { let _ = window.hide(); }
+                            else {
+                                let _ = window.set_position(tauri::PhysicalPosition::new(position.x as i32 - 150, position.y as i32 + 12));
+                                let _ = window.show(); let _ = window.set_focus();
+                                let _ = window.eval("window.presentPlayer && window.presentPlayer()");
+                                let _ = tray.app_handle().emit_to("main", "tray-sync", ());
+                            }
+                        }
+                    }
+                }).build(app)?;
             let handle = app.handle();
             let covers = handle.path().app_cache_dir()?.join("covers");
             handle
@@ -420,10 +499,19 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            online::online_mv_prepare,
+            online::online_mv_resolve,
+            online::online_art,
+            online::online_catalog,
+            online::online_play,
+            online::online_stations,
+            tray_action,
+            update_tray,
             get_library,
             import_folder,
             rescan,
             lyrics,
+            nas::discover_nas,
             nas::connect_nas,
             nas::import_nas,
             nas::browse_nas,
@@ -432,6 +520,7 @@ fn main() {
             edit_metadata,
             confirm_action,
             music_match::match_songs,
+            music_match::search_lyrics,
             music_match::cache_cover
         ])
         .run(tauri::generate_context!())

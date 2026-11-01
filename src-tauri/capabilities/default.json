@@ -2,7 +2,7 @@
   "identifier": "main",
   "description": "主窗口基础事件权限",
   "windows": [
-    "main"
+    "main", "tray-player"
   ],
   "permissions": [
     "core:default",

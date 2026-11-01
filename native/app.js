@@ -47,6 +47,7 @@ const ICONS = {
   refresh: '<path d="M20.8 12a8.8 8.8 0 1 1-2.6-6.3"/><path d="M20.8 4.2v5h-5"/>',
   filter: '<path d="M3.5 6h17M6.5 12h11M10 18h4"/>',
   download: '<path d="M12 3.2v11.6"/><path d="M7.6 11.4 12 15.8l4.4-4.4"/><path d="M4 20h16"/>',
+  musicFolder: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M13 11v5m0-4 4-1v4"/><ellipse cx="11.5" cy="17" rx="1.5" ry="1"/><ellipse cx="15.5" cy="16" rx="1.5" ry="1"/>',
   folder: '<path d="M3 7.5a2 2 0 0 1 2-2h3.6l2 2.5H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
   user: '<circle cx="12" cy="8.2" r="3.6"/><path d="M4.6 20.4a7.4 7.4 0 0 1 14.8 0"/>',
   play: '<path d="M8 5.2v13.6L19 12z" fill="currentColor" stroke="none"/>',
@@ -235,20 +236,22 @@ function renderSidebar() {
   const connected = state.boot?.connected;
   const account = state.boot?.server?.account;
   const onMusic = state.route.name === 'list' && state.route.type === 'music';
-  const selected = onMusic ? (MUSIC.favoriteOnly ? 'favorites' : MUSIC.localOnly ? 'local' : MUSIC.sourcePath ? 'source' : MUSIC.tab) : '';
+  const selected = onMusic ? (MUSIC.online ? 'online' : MUSIC.favoriteOnly ? 'favorites' : MUSIC.localOnly ? 'local' : MUSIC.sourcePath ? 'source' : MUSIC.tab) : '';
   const tile = (view, label, symbol) => `<button class="shell-tile ${selected === view ? 'active' : ''}" data-shell-view="${view}" aria-label="${label}" title="${label}">${icon(symbol, 21)}<span>${label}</span></button>`;
-  const sourceRows = (state.boot?.sources || []).map(source => {
+  let sourceOrder = [];
+  try { const saved = JSON.parse(localStorage.getItem('lingjing-source-order') || '[]'); if (Array.isArray(saved)) sourceOrder = saved; } catch (_) {}
+  const rank = source => { const index = sourceOrder.indexOf(source.id || source.path); return index < 0 ? sourceOrder.length : index; };
+  const sourceRows = [...(state.boot?.sources || [])].sort((a, b) => rank(a) - rank(b)).map(source => {
     const path = source.provider === 'nas' ? `nas:${source.path}` : source.path;
-    return `<button class="shell-source ${MUSIC.sourcePath === path && onMusic ? 'active' : ''}" data-shell-view="source" aria-label="${esc(source.name)}" data-path="${esc(path)}" title="${esc(source.path)}"><span class="shell-source-icon">${icon(source.provider === 'nas' ? 'server' : 'folder', 17)}</span><span>${esc(source.name)}</span></button>`;
+    return `<button draggable="true" data-source-id="${esc(source.id || source.path)}" class="shell-source ${selected === 'source' && MUSIC.sourcePath === path ? 'active' : ''}" data-shell-view="source" aria-label="${esc(source.name)}" data-path="${esc(path)}" title="${esc(source.path)}"><span class="shell-source-icon">${icon('musicFolder', 19)}</span><span>${esc(source.name)}</span></button>`;
   }).join('');
   $('#sidebar').innerHTML = `
     <div class="brand"><button class="shell-profile" data-act="account" title="账户与音乐库设置"><img src="/brand.png" width="40" height="40" alt="聆境音乐"><span class="shell-profile-copy"><b>${esc(connected && account ? account : '聆境音乐')}</b><small>${connected ? '已连接群晖' : '我的音乐空间'}</small></span>${icon('right', 14)}</button></div>
     <div class="shell-quicknav">${tile('song', '音乐馆', 'home')}${tile('artist', '歌手', 'mic')}${tile('album', '专辑', 'grid')}<button class="shell-tile" data-act="${connected ? 'account' : 'login'}" title="群晖音乐库">${icon('server', 21)}<span>群晖</span></button></div>
-    <button class="shell-add" data-act="local" aria-label="添加音乐文件夹" title="添加音乐文件夹">${icon('plus', 20)}</button>
-    <nav class="shell-library" aria-label="我的音乐"><button class="shell-link ${selected === 'favorites' ? 'active' : ''}" data-shell-view="favorites" aria-label="喜欢的音乐">${icon('heart', 21)}<span>喜欢的音乐</span><small>${state.favorites.size || ''}</small></button><button class="shell-link ${selected === 'local' ? 'active' : ''}" data-shell-view="local" aria-label="本地音乐">${icon('download', 21)}<span>本地音乐</span></button></nav>
+    <nav class="shell-library" aria-label="我的音乐"><button class="shell-link ${selected === 'online' ? 'active' : ''}" data-shell-view="online" aria-label="在线音乐" title="在线音乐">${icon('wifi', 21)}<span>在线音乐</span></button><button class="shell-link ${selected === 'favorites' ? 'active' : ''}" data-shell-view="favorites" aria-label="喜欢的音乐">${icon('heart', 21)}<span>喜欢的音乐</span><small>${state.favorites.size || ''}</small></button><button class="shell-link ${selected === 'local' ? 'active' : ''}" data-shell-view="local" aria-label="本地音乐">${icon('download', 21)}<span>本地音乐</span></button></nav>
     <div class="shell-section-label"><span>音乐目录</span><button data-act="local" title="添加音乐目录" aria-label="添加音乐目录">${icon('plus', 16)}</button></div>
     <div class="shell-sources">${sourceRows || '<p class="shell-no-source">导入文件夹，建立音乐库</p>'}</div>
-    <div class="shell-footer"><button class="shell-footer-button ${state.route.name === 'settings' ? 'active' : ''}" data-act="settings" aria-label="设置" title="设置">${icon('settings', 20)}</button><button class="shell-footer-button" data-act="theme" aria-label="切换亮暗主题" title="切换亮暗主题">${icon(currentTheme() === 'light' ? 'moon' : 'sun', 20)}</button><span>${(state.boot?.counts?.music || 0).toLocaleString()} 首歌曲</span></div>`;
+    <div class="shell-footer"><button class="shell-footer-button" data-shell-collapse aria-label="${document.documentElement.classList.contains('sidebar-collapsed') ? '展开侧栏' : '收起侧栏'}" title="收起 / 展开侧栏">${icon('left', 18)}</button><button class="shell-footer-button ${state.route.name === 'settings' ? 'active' : ''}" data-act="settings" aria-label="设置" title="设置">${icon('settings', 20)}</button><button class="shell-footer-button" data-act="theme" aria-label="切换亮暗主题" title="切换亮暗主题">${icon(currentTheme() === 'light' ? 'moon' : 'sun', 20)}</button><span>${(state.boot?.counts?.music || 0).toLocaleString()} 首歌曲</span></div>`;
   syncMusicPlayback();
 }
 
@@ -265,13 +268,7 @@ function renderTopbar() {
       <button class="search-btn" data-act="do-search" title="搜索">${icon('search', 15)}</button>
     </div>
     <div class="toolbar">
-      <button class="tool theme-btn" data-act="theme" title="切换深色 / 浅色模式">
-        ${icon(theme === 'light' ? 'moon' : 'sun', 18)}<span>${theme === 'light' ? '暗色' : '亮色'}</span>
-      </button>
       <button class="tool" data-act="scan" title="重新扫描媒体库">${icon('refresh', 19)}<span>刷新</span></button>
-      <button class="tool" data-act="local" title="添加本机目录">${icon('folder', 19)}<span>本机</span></button>
-      <button class="tool" data-act="settings" title="设置">${icon('settings', 19)}<span>设置</span></button>
-
     </div>
     ${window.__TAURI__ && window.LingjingPlatform === 'windows' ? `<div class="window-controls" role="group" aria-label="窗口控制">
       <button class="window-control" data-window-action="minimize" aria-label="最小化" title="最小化"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8h10"/></svg></button>
@@ -304,6 +301,7 @@ function filterCurrentMusic(query) {
 }
 function submitTopbarSearch() {
   const query = $('#searchInput')?.value || '';
+  if (MUSIC.online && typeof renderOnlineMusic === 'function') { renderOnlineMusic(query.trim()); return; }
   if (isMusicSearchContext()) { filterCurrentMusic(query); return; }
   MUSIC.q = query.trim();
   MUSIC.tab = 'song';
@@ -384,7 +382,7 @@ function route() {
     renderSidebar();
     renderMusic();
   }
-  $('#main').scrollTo({ top: 0, behavior: 'instant' });
+  if (!(MUSIC.online && state.route.name === 'list' && state.route.type === 'music')) $('#main').scrollTo({ top: 0, behavior: 'instant' });
   syncTopbarSearch();
   if (view) view.dataset.rendered = '1';
   if (segs[0] !== 'play') animateRouteView();
@@ -760,7 +758,7 @@ function detailHTML(d) {
   // 详情封面按当前曲目获取，与播放页共用地址，避免旧占位图缓存。
   const activeTrack = isMusic ? auIndexInfo() : null;
   const coverEp = activeTrack && activeTrack.id === base.id ? activeTrack.ep || 0 : (prog && prog.epIndex) || 0;
-  const musicArt = isMusic ? `/api/cover?item=${encodeURIComponent(base.id)}&ep=${coverEp}&fallback=0` : '';
+  const musicArt = isMusic ? (window.Lingjing ? base.art || '' : `/api/cover?item=${encodeURIComponent(base.id)}&ep=${coverEp}&fallback=0`) : '';
   if (isMusic) item = { ...item, poster: '', art: musicArt };
   const rawBg = item.backdrop || item.poster;
   const bg = musicArt || (rawBg ? proxyURL(rawBg) : `/api/placeholder?t=${encodeURIComponent(item.title)}&s=${hashCode(item.id)}`);
@@ -1184,6 +1182,7 @@ function animateVideoPage(open) {
 
 async function openPlayer(itemId, epIndex = 0) {
   const els = playerEls();
+  els.root.classList.add('is-immersive');
   // 视频与音频互斥：切到视频时把音频收起来（不销毁队列）
   if (AU.open) hideAudioPage();
   if (AU.data) auEl().pause();
@@ -1341,6 +1340,7 @@ function renderRecommend(currentId, type) {
   const wrap = $('#ppReco');
   const row = $('#ppRecoRow');
   if (!wrap || !row) return;
+  if (Player.data?.song?.video && typeof renderImmersiveRecommendations === 'function') { renderImmersiveRecommendations(currentId); return; }
   const all = allItems().filter((i) => i.id !== currentId);
   if (!all.length) {
     wrap.hidden = true;
@@ -1985,6 +1985,13 @@ function bindPlayer() {
       return;
     }
     const act = btn.dataset.pact;
+    if (act === 'recommendations') {
+      const open = root.classList.toggle('recommendations-open');
+      root.querySelector('[data-pact="recommendations"]').setAttribute('aria-expanded', String(open));
+      $('#ppReco').inert = !open;
+      if (!open) root.querySelector('.pp-reco-toggle').focus();
+      return;
+    }
     if (act === 'close') closePlayer();
     else if (act === 'toggle') togglePlay();
     else if (act === 'next') {
@@ -2270,15 +2277,15 @@ function musicBodyHTML() {
     if (!albums.length && !loose) return `<div class="empty"><h3>还没有专辑</h3><p>同一个目录里放 3 首以上，或放一张 cover/folder 图，就会被识别成专辑。</p></div>`;
     return `<div class="malbs">${albums
       .map(
-        (a) => `<button class="malb" data-act="malbum" data-name="${esc(a.name)}">
-          <span class="malb-art"><i style="background-image:url('${esc(a.art)}')"></i></span>
+        (a) => `<button class="malb" data-act="malbum" data-name="${esc(a.name)}" data-artist="${esc(a.artist || '')}">
+          <span class="malb-art ${a.art ? 'has-cover' : 'no-cover'}">${a.art ? `<i style="background-image:url('${esc(a.art)}')"></i>` : `<span class="malb-disc">${icon('note', 30)}</span>`}<span class="malb-open">${icon('play', 17)}</span></span>
           <span class="malb-name">${esc(a.name)}</span>
           <span class="malb-sub">${esc(a.artist || '群星')} · ${a.count} 首</span>
         </button>`
       )
       .join('')}
       ${loose ? `<button class="malb loose" data-act="malbum" data-name="__none__">
-        <span class="malb-art"><i></i><b>♪</b></span>
+        <span class="malb-art no-cover"><span class="malb-disc">${icon('note', 30)}</span><span class="malb-open">${icon('play', 17)}</span></span>
         <span class="malb-name">散装单曲</span>
         <span class="malb-sub">${loose} 首 · 无专辑信息</span>
       </button>` : ''}
@@ -2336,15 +2343,18 @@ function musicFiltersHTML() {
 
 function musicPageHTML() {
   const d = MUSIC.data || {};
-  const st = d.stats || {};
   const songs = musicFiltered();
+  const scoped = MUSIC.favoriteOnly || MUSIC.localOnly || MUSIC.sourcePath;
+  const st = scoped ? { songs: songs.length, artists: new Set(songs.map(s => s.artist)).size, albums: new Set(songs.filter(s => s.album).map(s => `${s.artist}|${s.album}`)).size } : (d.stats || {});
+  const source = (state.boot?.sources || []).find(s => (s.provider === 'nas' ? `nas:${s.path}` : s.path) === MUSIC.sourcePath);
+  const pageTitle = MUSIC.favoriteOnly ? '喜欢的音乐' : MUSIC.localOnly ? '本地音乐' : MUSIC.sourcePath ? (source?.name || '音乐目录') : MUSIC.tab === 'artist' ? '歌手' : MUSIC.tab === 'album' ? '专辑' : '音乐馆';
   const loose = (d.songs || []).some((s) => !s.album);
   const albumCards = (st.albums || 0) + (loose ? 1 : 0);
   return `<div class="mp">
     <div class="mp-head">
       <div class="mp-titles">
         <div class="mp-kicker">${icon('note', 13)} 我的音乐</div>
-        <h1 class="mp-title">音乐馆</h1>
+        <h1 class="mp-title">${esc(pageTitle)}</h1>
         <div class="mp-stats">
           <span><b>${st.songs || 0}</b> 首歌曲</span>
           <span><b>${st.artists || 0}</b> 位歌手</span>
@@ -2367,6 +2377,7 @@ function musicPageHTML() {
 }
 
 function paintMusic() {
+  if (MUSIC.online) { renderOnlineMusic(); return; }
   const view = $('#view');
   if (!view) return;
   const scroller = $('#main');
@@ -2387,12 +2398,13 @@ function paintMusicBody() {
 }
 
 async function renderMusic() {
+  if (MUSIC.online) { renderOnlineMusic(); return; }
   const view = $('#view');
   if (!MUSIC.data) {
     view.innerHTML = `<div class="mp-loading"><div class="p-spinner"></div><p>正在整理音乐库…</p></div>`;
   }
   syncMiniBar();
-  await fetchMusic();
+  if (!MUSIC.data) await fetchMusic();
   if (!(state.route.name === 'list' && state.route.type === 'music')) return;
   if (auIndexInfo() && !MUSIC.shellNavigation) {
     MUSIC.tab = 'song';
@@ -2409,7 +2421,7 @@ async function renderMusic() {
 function scrollToCurrentMusic() {
   const scroller = $('#main');
   if (!scroller) return;
-  const currentRow = document.querySelector('.mtbody .mtr[aria-current="true"]');
+  const currentRow = document.querySelector('.mtbody .mtr[aria-current="true"], .mart[aria-current="true"], .malb[aria-current="true"]');
   // 直接按当前滚动位置计算，避免先回顶部的平滑滚动与歌曲定位互相覆盖。
   const top = currentRow
     ? scroller.scrollTop + currentRow.getBoundingClientRect().top - scroller.getBoundingClientRect().top
@@ -2668,9 +2680,9 @@ async function loadAuTrack(i, opts = {}) {
   // 进歌就静默搜歌词（服务端有缓存，切歌不心疼）；失败也不打扰用户
   loadLyrics(t).catch(() => {});
   if (opts.autoplay !== false) {
-    el.play().catch(() => {
+    el.play().catch(error => {
       setAuPlaying(false);
-      toast('浏览器拦截了自动播放，点一下播放键');
+      toast(error.name === 'NotAllowedError' ? '点一下播放键开始播放' : '音频加载失败，请检查网络或重试');
     });
   }
   syncMediaSession(d, t);
@@ -3052,6 +3064,31 @@ function syncMusicPlayback() {
     const marker = row.querySelector('.song-playing');
     if (marker) marker.hidden = !(on && playing);
   });
+  const song = AU.data?.song || (MUSIC.data?.songs || []).find(song => current && song.id === current.id) || current;
+  const online = !!(song?.onlineSource || current?.id?.startsWith('radio:') || current?.id?.startsWith('gequbao:') || current?.id?.startsWith('90t8:') || current?.id?.startsWith('shiyinren:'));
+  document.querySelectorAll('[data-shell-view]').forEach(button => {
+    const view = button.dataset.shellView;
+    if (button.classList.contains('shell-tile')) { button.querySelector('.shell-playing')?.remove(); return; }
+    const path = button.dataset.path;
+    const belongs = !!current && (view === 'online' ? online : online ? false :
+      view === 'source' ? !!song?.path && (song.path === path || song.path.startsWith(path.replace(/[/\\]$/, '') + '/') || song.path.startsWith(path.replace(/[/\\]$/, '') + '\\')) :
+      view === 'local' ? !!song?.path && !song.path.startsWith('nas:') :
+      view === 'favorites' ? state.favorites.has(current.id) : ['song', 'artist', 'album'].includes(view));
+    let marker = button.querySelector('.shell-playing');
+    if (!marker) {
+      marker = document.createElement('i');
+      marker.className = 'meq shell-playing';
+      marker.setAttribute('aria-label', '正在播放');
+      marker.innerHTML = '<b></b><b></b><b></b><b></b>';
+      button.append(marker);
+    }
+    marker.hidden = !(belongs && playing);
+  });
+  document.querySelectorAll('.mart, .malb').forEach(card => {
+    const on = !!song && (card.classList.contains('mart') ? card.dataset.name === song.artist : card.dataset.name === (song.album || '__none__') && (!card.dataset.artist || card.dataset.artist === song.artist));
+    if (on) card.setAttribute('aria-current', 'true'); else card.removeAttribute('aria-current');
+    card.classList.toggle('is-current', on);
+  });
   document.querySelectorAll('.apq-no .meq').forEach(node => node.classList.toggle('is-paused', !playing));
 }
 
@@ -3258,11 +3295,11 @@ async function loadLyrics(t, opts = {}) {
   const qs = new URLSearchParams({ item: t.id, ep: String(t.ep || 0) });
   if (opts.q) qs.set('q', opts.q);
   if (opts.refresh) qs.set('refresh', '1');
-  let d = null;
+  let d = null, lyricError = '';
   try {
     d = await api(`/api/lyrics?${qs.toString()}`);
   } catch (e) {
-    d = null;
+    lyricError = e.message || '歌词服务暂时无法连接，请重新匹配';
   }
   if (LY.key !== key) return; // 中途切歌了，丢弃这次结果
   LY.loading = false;
@@ -3271,7 +3308,7 @@ async function loadLyrics(t, opts = {}) {
     LY.src = d.source || '';
     renderLyric();
   } else {
-    paintLyricStatus(opts.q ? `没搜到「${opts.q}」的歌词` : '这首歌暂时没找到歌词');
+    paintLyricStatus(lyricError || (opts.q ? `没搜到「${opts.q}」的歌词` : '这首歌暂时没找到歌词'));
   }
 }
 
@@ -3351,13 +3388,15 @@ function syncAuMode() {
 function positionAuQueue() {
   const q = $('#apQueue');
   if (!q || q.hidden) return;
-  const bounds = document.querySelector('.ap-bottom').getBoundingClientRect();
+  const anchor = $('#apQueueBtn').getBoundingClientRect();
   const page = $('#audioPage').getBoundingClientRect();
-  const edge = bounds.top - 12;
-  q.style.bottom = `${window.innerHeight - edge}px`;
-  q.style.right = `${Math.max(12, window.innerWidth - bounds.right)}px`;
-  q.style.width = `${Math.min(390, bounds.width)}px`;
-  q.style.height = `${Math.max(80, Math.min(440, edge - page.top - 12))}px`;
+  const edge = Math.min(anchor.top - 12, window.innerHeight - 16);
+  const available = Math.max(120, edge - Math.max(page.top, 0) - 16);
+  const width = Math.min(390, Math.max(240, page.width - 32));
+  q.style.bottom = `${Math.max(16, window.innerHeight - edge)}px`;
+  q.style.right = `${Math.max(16, window.innerWidth - Math.max(page.left + width + 16, anchor.right))}px`;
+  q.style.width = `${width}px`;
+  q.style.height = `${Math.min(360, available)}px`;
 }
 window.addEventListener('resize', positionAuQueue);
 
@@ -3497,8 +3536,11 @@ function bindAudio() {
   });
   el.addEventListener('error', () => {
     if (!el.currentSrc) return;
-    toast('这首播放失败，跳到下一首');
-    setTimeout(() => auNext(true), 400);
+    el.pause();
+    syncAuPlayIcon();
+    syncMiniBar();
+    persistAudioSession(true);
+    toast('播放失败，请检查网络或音频文件，点击播放重试');
   });
 
   // 进度条拖动
@@ -3800,14 +3842,14 @@ function bindAudio() {
 function loginHTML() {
   const s = (state.boot && state.boot.server) || {};
   return `<div class="login-page">
-    <div class="login-card">
+    <div class="login-card"><button class="login-dismiss" data-act="close-login" aria-label="返回设置" title="返回（Esc）">${icon('left', 18)} 返回设置</button>
       <div class="login-logo">
         <img src="/brand.png" width="36" height="36" alt="聆境音乐" />
         <div class="brand-text">聆境音乐</div>
         <div class="brand-tag">NAS</div>
       </div>
       <h2>连接你的群晖</h2>
-      <p class="sub">输入 NAS 的 IP 与账号，即可自动读取视频目录、分类并在线播放。</p>
+      <p class="sub">连接群晖后，即可浏览并播放 NAS 中的音乐。</p>
       <div id="loginErr"></div>
       <form id="loginForm">
         <div class="field-row">
@@ -3817,7 +3859,7 @@ function loginHTML() {
           </div>
           <div class="field" style="flex:1">
             <label>端口</label>
-            <input name="port" type="number" placeholder="5001" value="${esc(s.port || 5001)}" />
+            <input name="port" type="number" placeholder="5000" value="${esc(s.port || 5000)}" />
           </div>
         </div>
         <div class="discover-row">
@@ -3836,7 +3878,7 @@ function loginHTML() {
           <label>两步验证码</label>
           <input name="otp" placeholder="6 位动态验证码" autocomplete="one-time-code" />
         </div>
-        <label class="check"><input type="checkbox" name="https" ${s.https !== false ? 'checked' : ''} /> 使用 HTTPS（群晖默认 5001 端口）</label>
+        <label class="check"><input type="checkbox" name="https" ${s.https === true ? 'checked' : ''} /> 使用 HTTPS（群晖默认 5001 端口）</label>
         <p class="login-hint">本次连接不保存密码，退出软件后需要重新登录。</p>
         <button class="btn-block" type="submit" id="loginBtn">登录</button>
       </form>
@@ -3937,7 +3979,7 @@ function renderLogin() {
         method: 'POST',
         body: JSON.stringify({
           host: fd.get('host'),
-          port: Number(fd.get('port') || 5001),
+          port: Number(fd.get('port') || (fd.get('https') ? 5001 : 5000)),
           https: !!fd.get('https'),
           account: fd.get('account'),
           password: fd.get('password'),
@@ -3951,7 +3993,8 @@ function renderLogin() {
       renderSidebar();
       await loadLibrary();
       startScanPoll();
-      await boot();
+      state.boot.needLogin = false;
+      go('#/settings');
     } catch (err) {
       errBox.innerHTML = `<div class="login-err">${esc(err.message)}</div>`;
       if (/两步验证|验证码/.test(err.message)) $('#otpField').hidden = false;
@@ -3987,8 +4030,8 @@ function settingsHTML() {
       <div class="kv"><b>设备名</b><span>${esc(b.hostname || '—')}</span></div>
       <div class="kv"><b>账号</b><span>${esc(s.account || '—')}</span></div>
       <div class="panel-foot">
-        <button class="btn-line sm" data-act="relogin">${icon('link', 14)} 重新登录</button>
-        <button class="btn-line sm" data-act="logout">${icon('close', 14)} 退出登录</button>
+        <button class="btn-line sm" data-act="relogin">${icon('link', 14)} ${b.connected ? '重新登录' : '登录群晖'}</button>
+        ${b.connected ? `<button class="btn-line sm" data-act="logout">${icon('close', 14)} 退出登录</button>` : ''}
       </div>
     </div>
 
@@ -4260,7 +4303,7 @@ async function onClick(e) {
   if (act === 'malbum') {
     MUSIC.tab = 'song';
     MUSIC.album = el.dataset.name;
-    MUSIC.artist = 'all';
+    MUSIC.artist = el.dataset.artist || 'all';
     MUSIC.q = '';
     paintMusic();
     const main = $('#main');
@@ -4314,6 +4357,7 @@ async function onClick(e) {
     renderTaskProgress();
     return;
   }
+  if (act === 'scan' && MUSIC.online && state.route.name === 'list' && state.route.type === 'music' && typeof refreshOnlineViews === 'function') { refreshOnlineViews(); return; }
   if (act === 'scan' || act === 'scan-source') {
     const sourceId = act === 'scan-source' ? el.dataset.sid : null;
     toast(sourceId ? '开始扫描此目录…' : '开始扫描媒体库…');
@@ -4359,9 +4403,15 @@ async function onClick(e) {
     go('#/settings');
     return;
   }
+  if (act === 'close-login') {
+    state.boot.needLogin = false;
+    go('#/settings');
+    return;
+  }
   if (act === 'login') {
-    state.boot.needLogin = true;
-    renderLogin();
+    state.loginReturnHash = location.hash.startsWith('#/login') ? '#/list/music' : location.hash || '#/list/music';
+    state.boot.needLogin = false;
+    go('#/login');
     return;
   }
   if (act === 'account') {
@@ -4545,8 +4595,9 @@ async function onClick(e) {
     return;
   }
   if (act === 'relogin') {
-    state.boot.needLogin = true;
-    renderLogin();
+    state.loginReturnHash = location.hash.startsWith('#/login') ? '#/list/music' : location.hash || '#/list/music';
+    state.boot.needLogin = false;
+    go('#/login');
     return;
   }
 
@@ -4684,6 +4735,8 @@ function startScanPoll() {
 }
 
 async function loadLibrary() {
+  // 仅媒体库实际更新时失效，普通页面切换复用已加载数据。
+  MUSIC.data = null;
   try {
     const data = await api('/api/library');
     state.lib = data;
@@ -4779,3 +4832,39 @@ window.addEventListener('hashchange', route);
 bindPlayer();
 bindAudio();
 boot();
+
+// 托盘与系统媒体按键共用播放器状态。
+if (window.__TAURI__) {
+  const syncTrayPlayer = () => {
+    const el = auEl();
+    const d = AU.data;
+    const title = d ? (d.song?.title || d.episodeTitle || d.title || '聆境音乐') : '暂无播放';
+    window.__TAURI__.core.invoke('update_tray', { title, playing: !!el && !el.paused, theme: currentTheme(), accent: getComputedStyle(document.documentElement).getPropertyValue('--brand').trim() }).catch(console.error);
+    if ('mediaSession' in navigator) navigator.mediaSession.playbackState = d ? (el && !el.paused ? 'playing' : 'paused') : 'none';
+  };
+  window.__TAURI__.event.listen('tray-playback', ({payload}) => {
+    if (payload === 'previous') auPrev();
+    if (payload === 'next') auNext(true);
+    if (payload === 'toggle') auToggle();
+  }).catch(console.error);
+  window.__TAURI__.event.listen('tray-sync', syncTrayPlayer).catch(console.error);
+  new MutationObserver(syncTrayPlayer).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-accent'] });
+  const media = auEl();
+  if (media) ['play', 'pause', 'loadedmetadata', 'emptied'].forEach(event => media.addEventListener(event, syncTrayPlayer));
+}
+
+document.addEventListener('change', event => {
+  if (event.target.matches('#loginForm input[name="https"]')) {
+    const port = event.target.form.elements.port;
+    if (['5000', '5001', ''].includes(port.value)) port.value = event.target.checked ? '5001' : '5000';
+  }
+});
+
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && document.querySelector('#loginForm')) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    state.boot.needLogin = false;
+    go('#/settings');
+  }
+}, true);

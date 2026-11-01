@@ -450,3 +450,99 @@ mod network_tests {
         assert!(!hits.is_empty(), "所有来源均未获得有效候选");
     }
 }
+
+fn fetch_lyric(client: &Client, hit: &Candidate) -> Result<String, String> {
+    let response = if hit.source == "qq" {
+        client.get("https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg")
+            .header("Referer", "https://y.qq.com/portal/player.html")
+            .query(&[("songmid", hit.id.as_str()), ("format", "json"), ("nobase64", "1"), ("g_tk", "5381")]).send()
+    } else {
+        client.get("https://music.163.com/api/song/lyric")
+            .header("Referer", "https://music.163.com/")
+            .query(&[("id", hit.id.as_str()), ("lv", "-1"), ("kv", "-1"), ("tv", "-1")]).send()
+    }.map_err(|e| e.to_string())?;
+    let data = json(response)?;
+    Ok(if hit.source == "qq" { text(&data["lyric"]) } else { text(&data["lrc"]["lyric"]) })
+}
+fn has_timed_lyrics(raw: &str) -> bool {
+    regex::Regex::new(r"\[\d{1,3}:\d{1,2}(?:[.:]\d{1,3})?\]")
+        .unwrap().is_match(raw) && !raw.contains("纯音乐，请欣赏")
+}
+fn find_lyrics(client: &Client, title: &str, artist: &str, duration: f64, query: &str) -> Result<Value, String> {
+    let artist = if ["未知歌手", "未知艺术家", "unknown artist"].contains(&artist.trim().to_lowercase().as_str()) { "" } else { artist.trim() };
+    let queries = if query.trim().is_empty() {
+        let mut q = vec![format!("{title} {artist}").trim().to_owned()];
+        if !artist.is_empty() { q.push(title.to_owned()); }
+        q
+    } else { vec![query.trim().to_owned()] };
+    let mut seen = HashSet::new();
+    let mut reached = false;
+    for q in queries {
+        for provider in ["netease", "qq"] {
+            let found = if provider == "netease" {
+                client.post("https://music.163.com/api/search/get/web")
+                    .header("Referer", "https://music.163.com/")
+                    .form(&[("s", q.as_str()), ("type", "1"), ("limit", "12"), ("offset", "0")])
+                    .send().map_err(|e| e.to_string()).and_then(json).and_then(|v| parse_netease(&v))
+            } else { search_qq(client, &q) };
+            if let Ok(mut hits) = found {
+                reached = true;
+                if query.trim().is_empty() { hits = ranked(hits, title, artist, duration); }
+                for hit in hits.into_iter().take(4) {
+                    if !seen.insert(format!("{}:{}", hit.source, hit.id)) { continue; }
+                    if let Ok(raw) = fetch_lyric(client, &hit) {
+                        if has_timed_lyrics(&raw) { return Ok(serde_json::json!({"ok":true,"source":hit.source,"lrc":raw})); }
+                    }
+                }
+            }
+        }
+    }
+    if !reached { return Err("歌词服务暂时无法连接，请稍后重新匹配".into()); }
+    Ok(serde_json::json!({"ok":false,"lrc":""}))
+}
+#[tauri::command]
+pub async fn search_lyrics(app: tauri::AppHandle, title: String, artist: String, duration: f64, query: String, refresh: bool) -> Result<Value, String> {
+    if title.chars().count() > 200 || artist.chars().count() > 200 || query.chars().count() > 200 { return Err("歌词搜索内容过长".into()); }
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut hash = std::collections::hash_map::DefaultHasher::new();
+        (&title, &artist, duration.to_bits(), &query).hash(&mut hash);
+        let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?.join("lyrics");
+        let path = dir.join(format!("{:x}.json", hash.finish()));
+        if !refresh {
+            if let Ok(data) = std::fs::read(&path) {
+                let fresh = path.metadata().ok().and_then(|m| m.modified().ok()).and_then(|t| t.elapsed().ok()).is_some_and(|age| age.as_secs() < 30 * 86400);
+                if fresh { if let Ok(value) = serde_json::from_slice::<Value>(&data) { return Ok(value); } }
+            }
+        }
+        let client = Client::builder().connect_timeout(Duration::from_secs(5)).timeout(Duration::from_secs(8)).user_agent("Mozilla/5.0 LingjingMusic/0.1").build().map_err(|e| e.to_string())?;
+        let result = find_lyrics(&client, title.trim(), &artist, duration, &query)?;
+        // 不缓存失败结果，网络恢复后能够立即重试。
+        if result["ok"] == true {
+            let _ = std::fs::create_dir_all(dir);
+            if let Ok(bytes) = serde_json::to_vec(&result) { let _ = std::fs::write(path, bytes); }
+        }
+        Ok(result)
+    }).await.map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod lyric_tests {
+    use super::*;
+    #[test]
+    fn accepts_timed_lyrics_only() {
+        assert!(has_timed_lyrics("[00:01.20]歌词"));
+        assert!(has_timed_lyrics("[01:20:50]歌词"));
+        assert!(!has_timed_lyrics("暂无歌词"));
+        assert!(!has_timed_lyrics("[00:00.00]纯音乐，请欣赏"));
+    }
+    #[test]
+    #[ignore = "需要联网，验证真实歌曲歌词"]
+    fn live_lyrics() {
+        let client = Client::builder().timeout(Duration::from_secs(10)).build().unwrap();
+        for (title, artist) in [("最幸福的人", "曾春年"), ("晴天", "周杰伦"), ("放手", "阿杜")] {
+            let result = find_lyrics(&client, title, artist, 0.0, "").unwrap();
+            assert_eq!(result["ok"], true, "{title} 未匹配到歌词");
+            println!("{title} / {artist}: {} 字符，来源 {}", result["lrc"].as_str().unwrap().len(), result["source"]);
+        }
+    }
+}

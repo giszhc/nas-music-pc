@@ -9,7 +9,17 @@
         "minHeight": 600,
         "decorations": true,
         "titleBarStyle": "Overlay",
-        "hiddenTitle": true
+        "hiddenTitle": true,
+        "dragDropEnabled": false,
+        "transparent": true,
+        "windowEffects": {
+          "effects": [
+            "liquidGlassRegular",
+            "hudWindow"
+          ],
+          "state": "active",
+          "radius": 18
+        }
       }
     ]
   }

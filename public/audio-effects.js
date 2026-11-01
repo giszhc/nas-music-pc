@@ -149,9 +149,9 @@
         for (let k = from; k < to; k++) value = Math.max(value, graph.frequencies[k]);
         value /= 255;
       }
-      levels[i] = active ? Math.max(value, levels[i] * 0.82) : 0;
+      levels[i] = active ? (audio.muted || audio.volume <= 0 ? 0 : Math.max(value, levels[i] * 0.82)) : levels[i];
       const barHeight = Math.max(2, levels[i] * (height - 2));
-      drawing.globalAlpha = active && levels[i] > 0.03 ? 1 : 0.25;
+      drawing.globalAlpha = levels[i] > 0.03 ? 1 : 0.25;
       const barWidth = Math.min(2.5, step * 0.5);
       drawing.beginPath();
       drawing.roundRect(i * step + (step - barWidth) / 2, height - barHeight, barWidth, barHeight, barWidth / 2);
@@ -163,10 +163,10 @@
     return graph && graph.ctx.state === 'running' && !audio.paused && !audio.ended
       && !document.hidden && surfaces.some(({ canvas }) => canvas.clientWidth > 0);
   }
-  function stopSpectrum() {
+  function stopSpectrum(reset = false) {
     if (frame) cancelAnimationFrame(frame);
     frame = 0;
-    for (const surface of surfaces) surface.levels.fill(0);
+    if (reset === true) for (const surface of surfaces) surface.levels.fill(0);
     drawSpectrum(false);
   }
   function startSpectrum() {
@@ -184,7 +184,8 @@
   document.addEventListener('pointerdown', () => { if (!graph || graph.ctx.state !== 'running') activate(); }, { passive: true });
   document.addEventListener('keydown', () => { if (!graph || graph.ctx.state !== 'running') activate(); });
   audio.addEventListener('play', activate);
-  for (const event of ['pause', 'ended', 'emptied', 'waiting']) audio.addEventListener(event, stopSpectrum);
+  for (const event of ['pause', 'waiting']) audio.addEventListener(event, () => stopSpectrum());
+  for (const event of ['ended', 'emptied']) audio.addEventListener(event, () => stopSpectrum(true));
   audio.addEventListener('playing', startSpectrum);
   document.addEventListener('visibilitychange', () => document.hidden ? stopSpectrum() : startSpectrum());
   window.addEventListener('pagehide', stopSpectrum);

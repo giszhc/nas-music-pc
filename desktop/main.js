@@ -148,7 +148,7 @@ app.whenReady().then(async () => {
     app.quit();
     return;
   }
-  buildMenu();
+  Menu.setApplicationMenu(null);
   createWindow();
 
   app.on('activate', () => {

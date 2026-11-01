@@ -10,6 +10,7 @@
 <link rel="stylesheet" href="/glass.css?v=20261027-player-border-removed" />
 <link rel="stylesheet" href="/window.css" />
 <link rel="stylesheet" href="/shell.css" />
+<link rel="stylesheet" href="/liquid.css" />
 <script>
   /* 桌面客户端（Electron）加载时带 ?desktop=1：让侧边栏避开 macOS 左上角的红绿灯 */
   window.LingjingPlatform = /Mac/i.test(navigator.platform) ? 'macos' : /Win/i.test(navigator.platform) ? 'windows' : 'linux';
@@ -33,7 +34,7 @@
           <button class="pp-back" id="closeBtn" data-pact="close" title="返回（Esc）">
             <svg viewBox="0 0 24 24" width="18" height="18"><path d="M15 5l-7 7 7 7" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
-          <span class="pp-crumb-name" id="crumbName"></span>
+          <span class="pp-crumb-name" id="crumbName"></span><button class="pp-topbtn pp-reco-toggle" data-pact="recommendations" aria-controls="ppReco" aria-expanded="false">推荐</button>
           <button class="pp-topbtn" id="playerNext" data-pact="next" title="下一集（N）">下一集</button>
         </div>
 
@@ -110,7 +111,7 @@
 
             <!-- 视频下方：优酷式「为你推荐」横滑条 -->
             <section class="pp-reco" id="ppReco">
-              <div class="pp-reco-head">
+              <div class="pp-reco-head"><button class="pp-reco-close" data-pact="recommendations" aria-label="收起推荐">收起</button>
                 <h3>为你推荐</h3>
               </div>
               <div class="pp-reco-row" id="ppRecoRow"></div>
@@ -212,7 +213,7 @@
       <div class="apq-head">
         <h3>播放队列</h3>
         <span class="apq-meta" id="apqMeta"></span>
-        <button class="apq-close" data-aact="queue" title="收起">×</button>
+        <button class="apq-close" data-aact="queue" title="收起" aria-label="关闭播放队列"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
       </div>
       <input class="queue-search" id="apqSearch" type="search" placeholder="搜索歌名、歌手、专辑" aria-label="搜索播放队列" autocomplete="off">
       <div class="apq-list" id="apqList"></div>
@@ -280,6 +281,11 @@
       <img id="mbCover" alt="" hidden />
       <span class="mb-art-ph" id="mbArtPh"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 17V5l11-2v12M9 8l11-2"/><ellipse cx="6" cy="18" rx="3" ry="2"/><ellipse cx="17" cy="16" rx="3" ry="2"/></svg></span>
     </button>
+    <div class="mb-play-block">
+    <button class="mb-txt" data-aact="expand" title="展开播放页">
+      <b id="mbTitle">—</b>
+      <span id="mbSub"></span>
+    </button>
     <div class="mb-btns">
       <button class="mb-btn" data-aact="prev" title="上一首">
         <svg viewBox="0 0 24 24" width="18" height="18"><path d="M17.8 5.8Q19 5 19 6.4V17.6Q19 19 17.8 18.2L9.6 12.8Q8.4 12 9.6 11.2Z" fill="currentColor"/><path d="M6.5 5v14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -291,10 +297,7 @@
         <svg viewBox="0 0 24 24" width="18" height="18"><path d="M6.2 5.8Q5 5 5 6.4V17.6Q5 19 6.2 18.2L14.4 12.8Q15.6 12 14.4 11.2Z" fill="currentColor"/><path d="M17.5 5v14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
       </button>
     </div>
-    <button class="mb-txt" data-aact="expand" title="展开播放页">
-      <b id="mbTitle">—</b>
-      <span id="mbSub"></span>
-    </button>
+    </div>
     <canvas class="mb-spectrum" id="mbSpectrum" role="img" aria-label="实时音频频谱：从左到右为低频到高频，柱高表示声音强度"></canvas>
     <div class="mb-track mb-timing">
       <span class="mb-time"><span id="mbCur">00:00</span><span class="mb-time-total"> / <span id="mbDur">00:00</span></span></span>
@@ -310,7 +313,7 @@
       <button class="mb-btn" id="mbMode" data-aact="mode" title="播放模式：列表循环" aria-label="播放模式：列表循环"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path id="mbModeIcon" d="M19 9V7a2 2 0 00-2-2H5m0 0 3-3M5 5l3 3M5 15v2a2 2 0 002 2h12m0 0-3-3m3 3-3 3"/></svg></button>
       <button class="mb-btn" id="mbQueueBtn" data-aact="mini-queue" title="播放队列" aria-label="播放队列" aria-expanded="false"><svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 6h12M9 12h12M3 18h18"/><path d="m3 4 4 3-4 3z" fill="currentColor" stroke="none"/></svg></button>
     </div>
-    <section class="mb-queue" id="mbQueue" aria-label="播放队列" hidden><div class="mb-queue-head"><b>播放队列</b><span id="mbQueueCount">0 首</span><button class="mb-btn" data-aact="mini-queue" aria-label="收起队列">×</button></div><input class="queue-search" id="mbQueueSearch" type="search" placeholder="搜索歌名、歌手、专辑" aria-label="搜索迷你播放队列" autocomplete="off"><div id="mbQueueList"></div></section>
+    <section class="mb-queue" id="mbQueue" aria-label="播放队列" hidden><div class="mb-queue-head"><b>播放队列</b><span id="mbQueueCount">0 首</span><button class="mb-btn" data-aact="mini-queue" aria-label="收起队列"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg></button></div><input class="queue-search" id="mbQueueSearch" type="search" placeholder="搜索歌名、歌手、专辑" aria-label="搜索迷你播放队列" autocomplete="off"><div id="mbQueueList"></div></section>
   </div>
 
   <div class="modal-layer" id="modalLayer" hidden></div>

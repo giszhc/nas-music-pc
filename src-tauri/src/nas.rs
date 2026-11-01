@@ -38,7 +38,7 @@ pub async fn connect_nas(
 ) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
         let url =
-            url::Url::parse(&base).map_err(|_| "请输入完整群晖地址，如 https://nas.local:5001")?;
+            url::Url::parse(&base).map_err(|_| "请输入完整群晖地址，如 http://nas.local:5000")?;
         if !matches!(url.scheme(), "http" | "https")
             || url.host_str().is_none()
             || !url.username().is_empty()
@@ -313,4 +313,51 @@ pub async fn browse_nas(app: tauri::AppHandle, path: String) -> Result<Value, St
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+// 仅探测本机私有 IPv4 网段，使用 DSM API 验证设备，避免误报普通网页。
+#[tauri::command]
+pub async fn discover_nas() -> Result<Value, String> {
+    tauri::async_runtime::spawn_blocking(|| {
+        #[cfg(target_os = "windows")]
+        let output = std::process::Command::new("ipconfig").output();
+        #[cfg(not(target_os = "windows"))]
+        let output = std::process::Command::new("ifconfig").output();
+        let output = output.map_err(|e| format!("读取网络接口失败：{e}"))?;
+        let text = String::from_utf8_lossy(&output.stdout);
+        let mut ips = Vec::new();
+        for word in text.split_whitespace() {
+            if let Ok(ip) = word.parse::<std::net::Ipv4Addr>() {
+                if ip.is_private() && !ips.contains(&ip) { ips.push(ip); }
+            }
+        }
+        let mut targets = Vec::new();
+        for ip in &ips {
+            let octets = ip.octets();
+            for last in 1..255u8 {
+                let host = format!("{}.{}.{}.{}", octets[0], octets[1], octets[2], last);
+                if !targets.contains(&host) { targets.push(host); }
+            }
+        }
+        let client = reqwest::blocking::Client::builder().timeout(Duration::from_millis(900)).build().map_err(|e| e.to_string())?;
+        let targets = std::sync::Mutex::new(targets.into_iter());
+        let hosts = std::sync::Mutex::new(Vec::new());
+        std::thread::scope(|scope| {
+            for _ in 0..48 {
+                let client = &client; let targets = &targets; let hosts = &hosts;
+                scope.spawn(move || loop {
+                    let Some(ip) = targets.lock().unwrap().next() else { break; };
+                    let address = format!("http://{ip}:5000/webapi/query.cgi?api=SYNO.API.Info&version=1&method=query&query=SYNO.API.Auth");
+                    if let Ok(response) = client.get(address).send() {
+                        if let Ok(value) = response.json::<Value>() {
+                            if value["success"] == true && value["data"]["SYNO.API.Auth"].is_object() {
+                                hosts.lock().unwrap().push(json!({"ip":ip,"port":5000,"https":false,"name":"群晖 NAS"}));
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        Ok(json!({"ok":true,"hosts":hosts.into_inner().unwrap(),"localIps":ips.iter().map(ToString::to_string).collect::<Vec<_>>()}))
+    }).await.map_err(|e| e.to_string())?
 }

@@ -268,16 +268,7 @@ function renderTopbar() {
       <button class="search-btn" data-act="do-search" title="搜索">${icon('search', 15)}</button>
     </div>
     <div class="toolbar">
-      <button class="tool theme-btn" data-act="theme" title="切换深色 / 浅色模式">
-        ${icon(theme === 'light' ? 'moon' : 'sun', 18)}<span>${theme === 'light' ? '暗色' : '亮色'}</span>
-      </button>
       <button class="tool" data-act="scan" title="重新扫描媒体库">${icon('refresh', 19)}<span>刷新</span></button>
-      <button class="tool" data-act="local" title="添加本机目录">${icon('folder', 19)}<span>本机</span></button>
-      <button class="tool" data-act="settings" title="设置">${icon('settings', 19)}<span>设置</span></button>
-      <button class="avatar-btn" data-act="${connected ? 'account' : 'login'}">
-        <span class="avatar">${connected ? esc((account || 'U').slice(0, 1).toUpperCase()) : icon('user', 13)}</span>
-        <span>${connected ? esc(account || '已登录') : '登录'}</span>
-      </button>
     </div>`;
   syncTopbarSearch();
   syncScanButtons();
@@ -3464,8 +3455,11 @@ function bindAudio() {
   });
   el.addEventListener('error', () => {
     if (!el.currentSrc) return;
-    toast('这首播放失败，跳到下一首');
-    setTimeout(() => auNext(true), 400);
+    el.pause();
+    syncAuPlayIcon();
+    syncMiniBar();
+    persistAudioSession(true);
+    toast('播放失败，请检查网络或音频文件，点击播放重试');
   });
 
   // 进度条拖动
