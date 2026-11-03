@@ -409,27 +409,25 @@ fn update_tray(app: tauri::AppHandle, title: String, playing: bool, theme: Strin
         }
     });
 }
-fn tray_icon() -> tauri::image::Image<'static> {
-    // Small, antialiased rounded music mark, independent of the square bundle icon.
-    let size = 64u32;
-    let mut pixels = vec![0u8; (size * size * 4) as usize];
-    for y in 0..size { for x in 0..size {
-        let mut coverage = 0u32;
-        for sy in 0..4 { for sx in 0..4 {
-            let px = x as f32 + (sx as f32 + 0.5) / 4.0;
-            let py = y as f32 + (sy as f32 + 0.5) / 4.0;
-            let dx = (px - 32.0).abs() - 18.0;
-            let dy = (py - 32.0).abs() - 18.0;
-            if dx.max(0.0).hypot(dy.max(0.0)) < 12.0 { coverage += 1; }
-        }}
-        let note = (x >= 30 && x <= 36 && y >= 17 && y <= 44)
-            || (x >= 34 && x <= 47 && y >= 17 && y <= 23)
-            || (((x as f32 - 25.0)/10.0).powi(2) + ((y as f32 - 44.0)/7.0).powi(2) <= 1.0);
-        let i = ((y * size + x) * 4) as usize;
-        pixels[i..i+4].copy_from_slice(&[if note {255} else {24}, if note {255} else {148}, if note {255} else {214}, (coverage * 255 / 16) as u8]);
-    }}
-    tauri::image::Image::new_owned(pixels, size, size)
+// Preserve the application artwork while rounding its menu-bar background.
+fn rounded_tray_icon(icon: &tauri::image::Image<'_>) -> tauri::image::Image<'static> {
+    let (width, height) = (icon.width(), icon.height());
+    let mut rgba = icon.rgba().to_vec();
+    let radius = width.min(height) as f32 * 0.23;
+    for y in 0..height {
+        for x in 0..width {
+            let px = x as f32 + 0.5;
+            let py = y as f32 + 0.5;
+            let dx = (radius - px).max(px - (width as f32 - radius)).max(0.0);
+            let dy = (radius - py).max(py - (height as f32 - radius)).max(0.0);
+            let coverage = (radius - dx.hypot(dy) + 0.5).clamp(0.0, 1.0);
+            let alpha = ((y * width + x) * 4 + 3) as usize;
+            rgba[alpha] = (rgba[alpha] as f32 * coverage).round() as u8;
+        }
+    }
+    tauri::image::Image::new_owned(rgba, width, height)
 }
+
 fn main() {
     tauri::Builder::default()
         .enable_macos_default_menu(false)
@@ -457,14 +455,9 @@ fn main() {
             tauri::WebviewWindowBuilder::new(app, "tray-player", tauri::WebviewUrl::App("tray.html".into()))
                 .title("聆境音乐播放控制").inner_size(320.0, 220.0)
                 .transparent(true)
-                .effects(tauri::utils::config::WindowEffectsConfig {
-                    effects: vec![tauri::utils::WindowEffect::HudWindow],
-                    state: Some(tauri::utils::WindowEffectState::Active),
-                    radius: Some(20.0), ..Default::default()
-                })
                 .decorations(false).resizable(false).always_on_top(true).skip_taskbar(true).visible(false).build()?;
             tauri::tray::TrayIconBuilder::with_id("player")
-                .icon(tray_icon())
+                .icon(rounded_tray_icon(app.default_window_icon().expect("应用图标未配置")))
                 .tooltip("聆境音乐").on_tray_icon_event(|tray, event| {
                     if let tauri::tray::TrayIconEvent::Click { position, button_state: tauri::tray::MouseButtonState::Up, .. } = event {
                         if let Some(window) = tray.app_handle().get_webview_window("tray-player") {

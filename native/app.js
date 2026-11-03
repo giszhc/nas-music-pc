@@ -282,9 +282,10 @@ function renderTopbar() {
 function isMusicSearchContext() {
   return state.route.name === 'list' && state.route.type === 'music';
 }
+let searchComposing = false;
 function syncTopbarSearch() {
   const input = $('#searchInput');
-  if (!input) return;
+  if (!input || searchComposing) return;
   const music = isMusicSearchContext();
   input.placeholder = '搜索音乐';
   input.setAttribute('aria-label', '搜索歌曲、歌手、专辑');
@@ -300,6 +301,7 @@ function filterCurrentMusic(query) {
   if (top && top.value !== query) top.value = query;
 }
 function submitTopbarSearch() {
+  if (searchComposing) return;
   const query = $('#searchInput')?.value || '';
   if (MUSIC.online && typeof renderOnlineMusic === 'function') { renderOnlineMusic(query.trim()); return; }
   if (isMusicSearchContext()) { filterCurrentMusic(query); return; }
@@ -2084,6 +2086,7 @@ function bindPlayer() {
 
   /* ---- 键盘 ---- */
   document.addEventListener('keydown', (e) => {
+  if (e.isComposing || searchComposing || e.keyCode === 229) return;
     if (root.hidden) return;
     const tag = (e.target.tagName || '').toLowerCase();
     if (tag === 'input' || tag === 'textarea' || tag === 'select') return;
@@ -3783,6 +3786,7 @@ function bindAudio() {
 
   // 音频页键盘
   document.addEventListener('keydown', (e) => {
+  if (e.isComposing || searchComposing || e.keyCode === 229) return;
     if (!AU.open || !$('#modalLayer').hidden) return;
     // Esc 优先处理：歌词搜索框里按 Esc 也要能收起来
     if (e.key === 'Escape') {
@@ -4813,13 +4817,23 @@ async function boot() {
 
 document.addEventListener('click', onClick);
 document.addEventListener('change', onChange);
+document.addEventListener('compositionstart', (e) => {
+  if (e.target?.id === 'searchInput') searchComposing = true;
+});
+document.addEventListener('compositionend', (e) => {
+  if (e.target?.id !== 'searchInput') return;
+  searchComposing = false;
+  if (isMusicSearchContext()) filterCurrentMusic(e.target.value);
+});
 document.addEventListener('input', (e) => {
+  if (e.isComposing || (e.target?.id === 'searchInput' && searchComposing)) return;
   if (e.target?.id === 'apqSearch') { renderAuQueue(); return; }
   if (e.target?.id === 'mbQueueSearch') { renderMiniQueue(); return; }
   if (e.target?.id === 'searchInput' && isMusicSearchContext()) { filterCurrentMusic(e.target.value); return; }
 
 });
 document.addEventListener('keydown', (e) => {
+  if (e.isComposing || searchComposing || e.keyCode === 229) return;
   if (e.key === 'Enter' && e.target && e.target.id === 'searchInput') {
     submitTopbarSearch();
   }
