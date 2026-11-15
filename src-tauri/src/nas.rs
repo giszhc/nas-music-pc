@@ -2,11 +2,12 @@ use crate::{Library, Song, State};
 use serde_json::{json, Value};
 use std::{io::Read, sync::Mutex, time::Duration};
 use tauri::{Emitter, Manager};
-#[derive(Clone)]
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
 struct Session {
     base: String,
     sid: String,
     token: String,
+    #[serde(skip)]
     client: reqwest::blocking::Client,
 }
 #[derive(Default)]
@@ -71,6 +72,15 @@ pub async fn connect_nas(
         )?;
         s.sid = d["sid"].as_str().ok_or("登录未返回会话")?.into();
         s.token = d["synotoken"].as_str().unwrap_or("").into();
+        let path = app.path().app_data_dir().map_err(|e| e.to_string())?.join("nas-session.json");
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(|e| e.to_string())?;
+        let bytes = serde_json::to_vec(&s).map_err(|e| e.to_string())?;
+        use std::io::Write;
+        let mut options = std::fs::OpenOptions::new();
+        options.write(true).create(true).truncate(true);
+        #[cfg(unix)]
+        { use std::os::unix::fs::OpenOptionsExt; options.mode(0o600); }
+        options.open(path).and_then(|mut file| file.write_all(&bytes)).map_err(|e| e.to_string())?;
         *app.state::<NasState>().0.lock().unwrap() = Some(s);
         Ok(())
     })
@@ -270,6 +280,7 @@ pub fn stream(
 
 #[tauri::command]
 pub fn disconnect_nas(app: tauri::AppHandle) {
+    if let Ok(dir) = app.path().app_data_dir() { let _ = std::fs::remove_file(dir.join("nas-session.json")); }
     *app.state::<NasState>().0.lock().unwrap() = None;
 }
 #[tauri::command]
@@ -360,4 +371,19 @@ pub async fn discover_nas() -> Result<Value, String> {
         });
         Ok(json!({"ok":true,"hosts":hosts.into_inner().unwrap(),"localIps":ips.iter().map(ToString::to_string).collect::<Vec<_>>()}))
     }).await.map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+pub fn nas_session(app: tauri::AppHandle) -> Value {
+    let state = app.state::<NasState>();
+    let mut session = state.0.lock().unwrap();
+    if session.is_none() {
+        *session = app.path().app_data_dir().ok()
+            .and_then(|dir| std::fs::read(dir.join("nas-session.json")).ok())
+            .and_then(|bytes| serde_json::from_slice::<Session>(&bytes).ok());
+    }
+    match session.as_ref() {
+        Some(s) => json!({"connected": true, "base": s.base}),
+        None => json!({"connected": false}),
+    }
 }

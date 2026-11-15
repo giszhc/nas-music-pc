@@ -3883,7 +3883,7 @@ function loginHTML() {
           <input name="otp" placeholder="6 位动态验证码" autocomplete="one-time-code" />
         </div>
         <label class="check"><input type="checkbox" name="https" ${s.https === true ? 'checked' : ''} /> 使用 HTTPS（群晖默认 5001 端口）</label>
-        <p class="login-hint">本次连接不保存密码，退出软件后需要重新登录。</p>
+        <p class="login-hint">登录会话将保存在本机，会话过期后需要重新登录。</p>
         <button class="btn-block" type="submit" id="loginBtn">登录</button>
       </form>
       <div class="login-alt">

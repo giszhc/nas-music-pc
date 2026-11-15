@@ -39,7 +39,7 @@ window.Lingjing = (()=>{
   async function request(path,opts={}){
     const u=new URL(path,location.href),body=opts.body?JSON.parse(opts.body):{};
     switch(u.pathname){
-      case '/api/state': await reload();return {ok:true,version:'0.1.0',connected,needLogin:false,server,hostname:server.host,sources:sources(),counts:{music:library.songs.length},total:library.songs.length,scanning:false,enriching:false,libraryReady:true,hasFfmpeg:false,hasTmdb:false,transcode:false};
+      case '/api/state': {const saved=await call('nas_session');connected=saved.connected;if(saved.base){const url=new URL(saved.base);server={...server,host:url.hostname,port:Number(url.port)||(url.protocol==='https:'?443:80),https:url.protocol==='https:'};}} await reload();return {ok:true,version:'0.1.0',connected,needLogin:false,server,hostname:server.host,sources:sources(),counts:{music:library.songs.length},total:library.songs.length,scanning:false,enriching:false,libraryReady:true,hasFfmpeg:false,hasTmdb:false,transcode:false};
       case '/api/library':{const all=items();return {ok:true,total:all.length,rows:[{id:'music',items:all}],lists:{music:all},featured:[]}}
       case '/api/music':return music();
       case '/api/music/match':return {ok:true,...await call('match_songs',{title:body.title||'',artist:body.artist||'',duration:Number(body.duration)||0})};

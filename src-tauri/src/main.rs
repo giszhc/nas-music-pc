@@ -430,7 +430,7 @@ fn rounded_tray_icon(icon: &tauri::image::Image<'_>) -> tauri::image::Image<'sta
 
 fn main() {
     tauri::Builder::default()
-        .enable_macos_default_menu(false)
+        .enable_macos_default_menu(true)
         .manage(State {
             library: Mutex::new(Library::default()),
             busy: Mutex::new(false),
@@ -504,6 +504,7 @@ fn main() {
             import_folder,
             rescan,
             lyrics,
+            nas::nas_session,
             nas::discover_nas,
             nas::connect_nas,
             nas::import_nas,
@@ -516,8 +517,18 @@ fn main() {
             music_match::search_lyrics,
             music_match::cache_cover
         ])
-        .run(tauri::generate_context!())
-        .expect("聆境音乐启动失败");
+        .build(tauri::generate_context!())
+        .expect("聆境音乐启动失败")
+        .run(|app, event| {
+            #[cfg(target_os = "macos")]
+            if let tauri::RunEvent::Reopen { .. } = event {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.unminimize();
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        });
 }
 
 #[cfg(test)]
