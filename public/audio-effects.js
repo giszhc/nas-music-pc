@@ -96,7 +96,14 @@
   async function activate() {
     if (!graph && selected === 'off' && !surfaces.length) return;
     try {
-      if (!graph) { graph = createGraph(); apply(); }
+      if (!graph) {
+        graph = createGraph();
+        apply();
+        graph.ctx.addEventListener('statechange', () => {
+          if (!audio.paused && !audio.ended && graph.ctx.state !== 'running'
+            && graph.ctx.state !== 'closed') activate();
+        });
+      }
       await graph.ctx.resume();
       startSpectrum();
     } catch (error) {
@@ -186,8 +193,14 @@
   audio.addEventListener('play', activate);
   for (const event of ['pause', 'waiting']) audio.addEventListener(event, () => stopSpectrum());
   for (const event of ['ended', 'emptied']) audio.addEventListener(event, () => stopSpectrum(true));
-  audio.addEventListener('playing', startSpectrum);
-  document.addEventListener('visibilitychange', () => document.hidden ? stopSpectrum() : startSpectrum());
+  audio.addEventListener('playing', activate);
+  function recoverPlayback() {
+    if (!audio.paused && !audio.ended) activate();
+    else startSpectrum();
+  }
+  document.addEventListener('visibilitychange', () => document.hidden ? stopSpectrum() : recoverPlayback());
+  window.addEventListener('focus', recoverPlayback);
+  window.addEventListener('pageshow', recoverPlayback);
   window.addEventListener('pagehide', stopSpectrum);
   if (surfaces.length) {
     const visibilityObserver = new MutationObserver(startSpectrum);
