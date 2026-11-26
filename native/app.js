@@ -2673,6 +2673,12 @@ async function loadAuTrack(i, opts = {}) {
     persistAudioSession(true);
   };
   el.addEventListener('loadedmetadata', AU.resumeHandler, { once: true });
+  // 远程音频经 Web Audio 输出时，必须在设置 src 前发起 CORS 请求。
+  if (d.song?.onlineSource && /^https?:\/\//i.test(d.url) && !d.song.stream?.startsWith('http://asset.localhost')) {
+    el.crossOrigin = 'anonymous';
+  } else {
+    el.removeAttribute('crossorigin');
+  }
   el.src = d.mode === 'direct' ? d.url : `${d.url}&start=${Math.floor(resume)}`;
   el.load();
   try {
@@ -3522,7 +3528,7 @@ function bindAudio() {
     syncMiniBar();
   });
   el.addEventListener('loadedmetadata', () => {
-    if (AU.data && !AU.data.duration && el.duration) AU.data.duration = el.duration;
+    if (AU.data && (!AU.data.duration || AU.data.song?.onlineSource === 'apple') && Number.isFinite(el.duration)) AU.data.duration = el.duration;
     updateAuBar();
   });
   el.addEventListener('ended', () => {
@@ -3539,6 +3545,17 @@ function bindAudio() {
   });
   el.addEventListener('error', () => {
     if (!el.currentSrc) return;
+    const data = AU.data;
+    if (data?.song?.backups?.length && !data.usedBackup && /^https?:/.test(data.url)) {
+      data.usedBackup = true;
+      const local = window.__TAURI__.core.convertFileSrc(data.song.backups[0]);
+      const position = el.currentTime;
+      el.removeAttribute('crossorigin');
+      el.src = local;
+      if (position > 0) el.currentTime = position;
+      el.play().catch(() => toast('备用音源暂时无法播放'));
+      return;
+    }
     el.pause();
     syncAuPlayIcon();
     syncMiniBar();
@@ -4364,16 +4381,18 @@ async function onClick(e) {
   if (act === 'scan' && MUSIC.online && state.route.name === 'list' && state.route.type === 'music' && typeof refreshOnlineViews === 'function') { refreshOnlineViews(); return; }
   if (act === 'scan' || act === 'scan-source') {
     const sourceId = act === 'scan-source' ? el.dataset.sid : null;
+    syncScanButtons({scanning:true});
     toast(sourceId ? '开始扫描此目录…' : '开始扫描媒体库…');
     try {
       const r = await api('/api/scan', { method: 'POST', body: JSON.stringify(sourceId ? { sourceId } : {}) });
-      if (!r.ok) { toast(r.reason || '扫描失败'); return; }
+      if (!r.ok) { syncScanButtons({}); toast(r.reason || '扫描失败'); return; }
       state.wasScanning = true;
       state.taskStatus = { ...(state.taskStatus || {}), scanning: true };
       syncScanButtons();
       startScanPoll();
       state.boot = await api('/api/state');
     } catch (err) {
+      syncScanButtons({});
       toast(err.message);
     }
     return;

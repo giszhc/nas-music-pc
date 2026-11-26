@@ -1,5 +1,5 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const fs=require('node:fs');
-function setup(options={}){let library={roots:['/音乐'],warnings:[],songs:[{path:'/音乐/中文 & test.flac',title:'测试',artist:'歌手',album:'专辑',duration:120}]};const calls=[];const context={window:{__TAURI__:{core:{invoke:async(name,args)=>{calls.push([name,args]);if(name==='nas_session')return {connected:false};if(name==='get_library'||name==='import_folder')return library;if(name==='lyrics')return options.localLyrics??'[00:01.00]第一行\n[00:02.50][00:04.00]第二行';if(name==='search_lyrics')return {ok:true,source:'netease',lrc:'[00:01.20]联网歌词'};if(name==='connect_nas')return null;if(name==='online_mv_prepare')return {mid:'661461106',cookie:'session_key=public_session'};if(name==='online_mv_resolve')return {url:'https://media.example.test/mv.mp4'};if(name==='online_play')return {localPath:'/cache/online-audio/test.mp3'};if(name==='match_songs')return {results:[{title:'晴天',artist:'周杰伦',album:'叶惠美',cover:'https://y.gtimg.cn/cover.jpg'}],warnings:[]};if(name==='cache_cover')return '/cache/covers/test.jpg';if(name==='edit_metadata'){library.songs=library.songs.map(s=>s.path===args.path?{...s,title:args.title,artist:args.artist,album:args.album,cover:args.cover}:s);return null;}throw new Error(name)},convertFileSrc:p=>'asset://'+encodeURIComponent(p)}}},URL,location:{href:'http://tauri.localhost/'},btoa:s=>Buffer.from(s,'binary').toString('base64'),unescape,encodeURIComponent};vm.createContext(context);vm.runInContext(fs.readFileSync('native/bridge.js','utf8'),context);return {bridge:context.window.Lingjing,calls,setLibrary:x=>library=x}}
+function setup(options={}){let library={roots:['/音乐'],warnings:[],songs:[{path:'/音乐/中文 & test.flac',title:'测试',artist:'歌手',album:'专辑',duration:120}]};const calls=[];const context={window:{__TAURI__:{core:{invoke:async(name,args)=>{calls.push([name,args]);if(name==='rescan')return options.rescan(args);if(name==='nas_session')return {connected:false};if(name==='get_library'||name==='import_folder')return library;if(name==='lyrics')return options.localLyrics??'[00:01.00]第一行\n[00:02.50][00:04.00]第二行';if(name==='search_lyrics')return {ok:true,source:'netease',lrc:'[00:01.20]联网歌词'};if(name==='connect_nas')return null;if(name==='online_mv_prepare')return {mid:'661461106',cookie:'session_key=public_session'};if(name==='online_mv_resolve')return {url:'https://media.example.test/mv.mp4'};if(name==='online_play')return {localPath:'/cache/online-audio/test.mp3'};if(name==='match_songs')return {results:[{title:'晴天',artist:'周杰伦',album:'叶惠美',cover:'https://y.gtimg.cn/cover.jpg'}],warnings:[]};if(name==='cache_cover')return '/cache/covers/test.jpg';if(name==='edit_metadata'){library.songs=library.songs.map(s=>s.path===args.path?{...s,title:args.title,artist:args.artist,album:args.album,cover:args.cover}:s);return null;}throw new Error(name)},convertFileSrc:p=>'asset://'+encodeURIComponent(p)}}},URL,location:{href:'http://tauri.localhost/'},btoa:s=>Buffer.from(s,'binary').toString('base64'),unescape,encodeURIComponent};vm.createContext(context);vm.runInContext(fs.readFileSync('native/bridge.js','utf8'),context);return {bridge:context.window.Lingjing,calls,setLibrary:x=>library=x}}
 test('中文目录与歌曲通过稳定标识连接原音乐列表和播放器',async()=>{const {bridge}=setup();await bridge.request('/api/state');const music=await bridge.request('/api/music');assert.equal(music.stats.songs,1);assert.equal(music.artists[0].name,'歌手');const song=music.songs[0];assert.doesNotMatch(song.id,/[+/=]/);const play=await bridge.request('/api/play?item='+song.id);assert.equal(play.song.path,'/音乐/中文 & test.flac');assert.equal(play.audio,true);assert.equal(play.mode,'direct');assert.equal(play.itemId,song.id);assert.equal(play.duration,120);assert.match(play.url,/asset:/)});
 test('原系统歌词结构接收多时间戳 LRC',async()=>{const {bridge}=setup();await bridge.request('/api/state');const song=(await bridge.request('/api/music')).songs[0];const result=await bridge.request('/api/lyrics?item='+song.id);assert.equal(result.lines.length,3);assert.equal(result.lines[1].t,2.5);assert.equal(result.lines[2].text,'第二行')});
 test('不同歌手的同名专辑保持分开',async()=>{const {bridge,setLibrary}=setup();setLibrary({roots:[],songs:[{path:'/a.mp3',title:'A',artist:'甲',album:'精选',duration:1},{path:'/b.mp3',title:'B',artist:'乙',album:'精选',duration:2}]});await bridge.request('/api/state');const result=await bridge.request('/api/music');assert.equal(result.albums.length,2);assert.equal(result.stats.duration,3)});
@@ -94,4 +94,50 @@ test('当前专辑按歌手区分，同名专辑不会一起高亮',()=>{
  const ctx={AU:{data:{song:{album:'音乐',artist:'阿杜',id:'1'}},el:{paused:true}},MUSIC:{data:{songs:[]}},state:{favorites:new Set()},auIndexInfo:()=>({id:'1',key:'1:0'}),document:{querySelectorAll:s=>s==='.mart, .malb'?cards:[]}};
  vm.createContext(ctx);vm.runInContext(fn+';syncMusicPlayback()',ctx);
  assert.equal(cards[0].classList['is-current'],true);assert.equal(cards[1].classList['is-current'],false);
+});
+
+test('同名歌曲优先显示注明的原唱，并保留其他搜索结果的位置', () => {
+  const shell = fs.readFileSync('native/shell.js', 'utf8');
+  const ranking = shell.slice(shell.indexOf('function rankSongVersions'), shell.indexOf('async function renderOnlineMusic'));
+  const rows = [
+    { title: '晴天（翻唱）', artist: '甲' },
+    { title: '其他歌曲', artist: '乙' },
+    { title: '晴天（原唱：周杰伦）', artist: '丙' },
+    { title: '晴天', artist: '丁' },
+    { title: '晴天', artist: '周杰伦' }
+  ];
+  const result = vm.runInNewContext(ranking + '\nrankSongVersions(rows)', { rows });
+  assert.deepEqual(Array.from(result, song => song.artist), ['周杰伦', '乙', '丁', '甲', '丙']);
+});
+
+test('旧队列中的 Apple 试听片段不能播放', async () => {
+  const { bridge, calls } = setup();
+  bridge.registerOnline({ id: 'preview', onlineSource: 'apple', stream: 'https://example.test/preview.m4a' });
+  await assert.rejects(bridge.request('/api/play?item=preview'), /已过滤试听/);
+  assert.equal(calls.length, 0);
+});
+
+test('扫描群晖目录会传递目录标识，并按路径报告真实差异', async () => {
+  const sourceId = 'nas:/music/音乐';
+  const { bridge, setLibrary } = setup({ rescan: args => {
+    assert.equal(args.sourceId, sourceId);
+    return {roots:[sourceId],warnings:[],songs:[{path:sourceId+'/新.mp3',stamp:'2'}]};
+  } });
+  setLibrary({roots:[sourceId],warnings:[],songs:[{path:sourceId+'/旧.mp3',stamp:'1'}]});
+  await bridge.request('/api/state');
+  await bridge.request('/api/scan',{method:'POST',body:JSON.stringify({sourceId})});
+  const status = await bridge.request('/api/scan/status');
+  assert.equal(status.msg,'扫描完成，新增 1 首，移除 1 首，变更 0 首');
+});
+
+test('已校验的外站整曲使用本机文件并保留歌词和封面', async () => {
+  const { bridge, calls } = setup();
+  const path = '/cache/online-audio/external.mp3';
+  bridge.registerOnline({ id:'external', title:'愿意不爱你', artist:'炎亚纶', onlineSource:'90t8',
+    verifiedFile:path, art:'https://example.test/cover.jpg', lyrics:'[00:01]歌词', duration:275 });
+  const played = await bridge.request('/api/play?item=external');
+  assert.equal(played.url, 'asset://' + encodeURIComponent(path));
+  assert.equal(played.duration, 275);
+  assert.equal(played.song.lyrics,'[00:01]歌词');
+  assert.equal(calls.length,0);
 });

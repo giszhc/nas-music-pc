@@ -92,16 +92,10 @@ pub async fn import_nas(app: tauri::AppHandle, path: String) -> Result<Library, 
     if !path.starts_with('/') || path == "/" {
         return Err("请输入共享文件夹路径，如 /music".into());
     }
-    let state = app.state::<State>();
-    {
-        let mut b = state.busy.lock().unwrap();
-        if *b {
-            return Err("正在扫描，请稍候".into());
-        }
-        *b = true;
-    }
-    let handle = app.clone();
-    let result = tauri::async_runtime::spawn_blocking(move || {
+    crate::update_library(app, Some(format!("nas:{path}")), true).await
+}
+
+pub(crate) fn scan_folder(handle: &tauri::AppHandle, path: &str) -> Result<Vec<Song>, String> {
         let session = handle
             .state::<NasState>()
             .0
@@ -109,7 +103,7 @@ pub async fn import_nas(app: tauri::AppHandle, path: String) -> Result<Library, 
             .unwrap()
             .clone()
             .ok_or("请先连接群晖")?;
-        let mut dirs = vec![path.clone()];
+        let mut dirs = vec![path.to_owned()];
         let mut songs = Vec::new();
         let mut visited = std::collections::HashSet::new();
         while let Some(dir) = dirs.pop() {
@@ -126,6 +120,7 @@ pub async fn import_nas(app: tauri::AppHandle, path: String) -> Result<Library, 
                         ("method", "list".into()),
                         ("folder_path", dir.clone()),
                         ("offset", offset.to_string()),
+                        ("additional", "[\"size\",\"time\"]".into()),
                         ("limit", "1000".into()),
                         ("_sid", session.sid.clone()),
                     ],
@@ -154,7 +149,7 @@ pub async fn import_nas(app: tauri::AppHandle, path: String) -> Result<Library, 
                             artist,
                             album: dir.rsplit('/').next().unwrap_or("").into(),
                             duration: 0.0,
-                            stamp: String::new(),
+                            stamp: format!("{}:{}", f["additional"]["size"], f["additional"]["time"]["mtime"]),
                             cover: String::new(),
                             edited: false,
                         });
@@ -169,25 +164,7 @@ pub async fn import_nas(app: tauri::AppHandle, path: String) -> Result<Library, 
                 }
             }
         }
-        let prefix = format!("nas:{}/", path.trim_end_matches('/'));
-        let mut lib = handle.state::<State>().library.lock().unwrap().clone();
-        let root = format!("nas:{path}");
-        if !lib.roots.contains(&root) {
-            lib.roots.push(root);
-        }
-        lib.songs.retain(|s| !s.path.starts_with(&prefix));
-        lib.songs.extend(songs);
-        crate::save(&handle, &lib)?;
-        Ok::<_, String>(lib)
-    })
-    .await
-    .map_err(|e| e.to_string())
-    .and_then(|x| x);
-    *state.busy.lock().unwrap() = false;
-    if let Ok(ref lib) = result {
-        *state.library.lock().unwrap() = lib.clone()
-    }
-    result
+    Ok(songs)
 }
 pub fn stream(
     app: &tauri::AppHandle,

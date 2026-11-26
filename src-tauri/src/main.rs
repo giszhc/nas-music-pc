@@ -248,13 +248,13 @@ async fn import_folder(
         .map_err(|e| e.to_string())?
         .to_string_lossy()
         .into_owned();
-    update_library(app, Some(root)).await.map(Some)
+    update_library(app, Some(root), true).await.map(Some)
 }
 #[tauri::command]
-async fn rescan(app: tauri::AppHandle) -> Result<Library, String> {
-    update_library(app, None).await
+async fn rescan(app: tauri::AppHandle, source_id: Option<String>) -> Result<Library, String> {
+    update_library(app, source_id, false).await
 }
-async fn update_library(app: tauri::AppHandle, root: Option<String>) -> Result<Library, String> {
+async fn update_library(app: tauri::AppHandle, root: Option<String>, importing: bool) -> Result<Library, String> {
     let state = app.state::<State>();
     {
         let mut b = state.busy.lock().unwrap();
@@ -263,54 +263,51 @@ async fn update_library(app: tauri::AppHandle, root: Option<String>) -> Result<L
         }
         *b = true;
     }
-    let mut roots = state.library.lock().unwrap().roots.clone();
-    if let Some(root) = root {
-        if !roots.contains(&root) {
-            roots.push(root)
-        }
-    }
     let handle = app.clone();
     let result = tauri::async_runtime::spawn_blocking(move || {
-        for root in &roots {
-            if root.starts_with("nas:") {
-                continue;
+        let mut lib = handle.state::<State>().library.lock().unwrap().clone();
+        let targets = if let Some(root) = root {
+            if !lib.roots.contains(&root) {
+                if !importing { return Err("音乐目录已移除".into()); }
+                lib.roots.push(root.clone());
             }
-            handle
-                .asset_protocol_scope()
-                .allow_directory(root, true)
-                .map_err(|e| e.to_string())?;
+            vec![root]
+        } else { lib.roots.clone() };
+        let mut refreshed = Vec::new();
+        lib.warnings.clear();
+        for root in &targets {
+            if let Some(path) = root.strip_prefix("nas:") {
+                refreshed.extend(nas::scan_folder(&handle, path).map_err(|e| format!("{path} 扫描失败：{e}"))?);
+            } else {
+                handle.asset_protocol_scope().allow_directory(root, true).map_err(|e| e.to_string())?;
+                let part = scan(vec![root.clone()], &lib.songs, |n| { let _ = handle.emit("scan-progress", n); });
+                refreshed.extend(part.songs);
+                lib.warnings.extend(part.warnings);
+            }
         }
-        let remote: Vec<Song> = handle
-            .state::<State>()
-            .library
-            .lock()
-            .unwrap()
-            .songs
-            .iter()
-            .filter(|s| s.path.starts_with("nas:"))
-            .cloned()
-            .collect();
-        let old = handle
-            .state::<State>()
-            .library
-            .lock()
-            .unwrap()
-            .songs
-            .clone();
-        let mut lib = scan(roots, &old, |n| {
-            let _ = handle.emit("scan-progress", n);
-        });
-        lib.songs.extend(remote);
+        let edited: std::collections::HashMap<_, _> = lib.songs.iter().filter(|s| s.edited && s.path.starts_with("nas:")).map(|s| (&s.path,s)).collect();
+        for song in &mut refreshed {
+            if let Some(old) = edited.get(&song.path) {
+                let stamp = song.stamp.clone();
+                *song = (**old).clone();
+                song.stamp = stamp;
+            }
+        }
+        lib.songs.retain(|s| !targets.iter().any(|r| Path::new(&s.path).starts_with(r)));
+        lib.songs.extend(refreshed);
+        let mut seen = std::collections::HashSet::new();
+        lib.songs.retain(|s| seen.insert(s.path.clone()));
+        lib.songs.sort_by(|a,b| a.title.cmp(&b.title));
         save(&handle, &lib)?;
         Ok::<_, String>(lib)
     })
     .await
     .map_err(|e| e.to_string())
     .and_then(|x| x);
-    *state.busy.lock().unwrap() = false;
     if let Ok(ref lib) = result {
         *state.library.lock().unwrap() = lib.clone()
     }
+    *state.busy.lock().unwrap() = false;
     result
 }
 #[tauri::command]
@@ -497,6 +494,7 @@ fn main() {
             online::online_art,
             online::online_catalog,
             online::online_play,
+            online::external_songs,
             online::online_stations,
             tray_action,
             update_tray,

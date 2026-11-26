@@ -6,6 +6,7 @@ window.Lingjing = (()=>{
   let library={roots:[],songs:[],warnings:[]},server={host:'',port:5000,https:false,account:''},connected=false;
   const id=path=>'s'+btoa(unescape(encodeURIComponent(path))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=/g,'');
   const track=s=>({...s,id:id(s.path),key:id(s.path)+':0',ep:0,albumArtist:s.artist,ext:'.'+s.path.split('.').pop().toLowerCase(),art:s.cover?(s.cover.startsWith('http')?s.cover:core?.convertFileSrc(s.cover)||''):'',dir:s.path.replace(/[/\\][^/\\]+$/,''),mtime:0,size:0,acodec:''});
+  let scanMessage = '', scanning = false;
   const onlineTracks = new Map();
   const tracks=()=>library.songs.map(track);
   const items=()=>tracks().map(s=>({id:s.id,title:s.title,type:'music',kind:'song',artist:s.artist,episodeCount:1,episodes:[{index:0,name:s.title,path:s.path,ext:s.ext,artist:s.artist,songTitle:s.title}],art:s.art,poster:'',meta:{},progress:null}));
@@ -43,7 +44,7 @@ window.Lingjing = (()=>{
       case '/api/library':{const all=items();return {ok:true,total:all.length,rows:[{id:'music',items:all}],lists:{music:all},featured:[]}}
       case '/api/music':return music();
       case '/api/music/match':return {ok:true,...await call('match_songs',{title:body.title||'',artist:body.artist||'',duration:Number(body.duration)||0})};
-      case '/api/play':{const s=onlineTracks.get(u.searchParams.get('item'))||tracks().find(s=>s.id===u.searchParams.get('item'));if(!s)throw new Error('歌曲不存在，请重新扫描音乐目录');if(s.video){const session=await call('online_mv_prepare',{path:s.onlinePath});const split=session.cookie.indexOf('=');const secret=mvSessionProof(session.cookie.slice(split+1),session.cookie.slice(0,split));const resolved=await call('online_mv_resolve',{mid:session.mid,cookie:session.cookie,secret});s.stream=resolved.url;}else if(s.onlineSource){const resolved=await call('online_play',{source:s.onlineSource,path:s.onlinePath});s.stream=resolved.localPath?core.convertFileSrc(resolved.localPath):resolved.url;s.art=resolved.cover||'';s.lyrics=resolved.lyrics||'';}const url=s.stream|| (s.path.startsWith('nas:')?core.convertFileSrc('/stream','nas')+'?path='+encodeURIComponent(s.path.slice(4)):core.convertFileSrc(s.path));return {ok:true,itemId:s.id,epIndex:0,title:s.title,episodeTitle:s.title,episodeArtist:s.artist,artist:s.artist,kind:s.video?'movie':'song',type:s.video?'video':'music',audio:!s.video,song:s,mode:'direct',playable:true,url,urls:{direct:url},seekable:true,duration:s.duration,art:s.art,poster:s.art,playlist:{current:0,items:[{itemId:s.id,epIndex:0,title:s.title,artist:s.artist}]},audioTracks:[],subtitleTracks:[],episodes:s.video?[{index:0,name:s.title,title:s.title}]:[],totalEpisodes:1}}
+      case '/api/play':{const s=onlineTracks.get(u.searchParams.get('item'))||tracks().find(s=>s.id===u.searchParams.get('item'));if(!s)throw new Error('歌曲不存在，请重新扫描音乐目录');if(s.onlineSource==='netease-mv'){const resolved=await call('online_play',{source:s.onlineSource,path:s.onlinePath});s.stream=resolved.url;}else if(s.onlineSource==='apple'){throw new Error('已过滤试听片段，请重新搜索完整歌曲');}else if(s.video){const session=await call('online_mv_prepare',{path:s.onlinePath});const split=session.cookie.indexOf('=');const secret=mvSessionProof(session.cookie.slice(split+1),session.cookie.slice(0,split));const resolved=await call('online_mv_resolve',{mid:session.mid,cookie:session.cookie,secret});s.stream=resolved.url;}else if(s.verifiedFile){s.stream=core.convertFileSrc(s.verifiedFile);}else if(s.onlineSource){const resolved=await call('online_play',{source:s.onlineSource,path:s.onlinePath}).catch(error=>{if(s.backups?.length)return {localPath:s.backups[0]};throw error;});s.stream=resolved.localPath?core.convertFileSrc(resolved.localPath):resolved.url;s.art=resolved.cover||'';s.lyrics=resolved.lyrics||'';}const url=s.stream|| (s.path.startsWith('nas:')?core.convertFileSrc('/stream','nas')+'?path='+encodeURIComponent(s.path.slice(4)):core.convertFileSrc(s.path));return {ok:true,itemId:s.id,epIndex:0,title:s.title,episodeTitle:s.title,episodeArtist:s.artist,artist:s.artist,kind:s.video?'movie':'song',type:s.video?'video':'music',audio:!s.video,song:s,mode:'direct',playable:true,url,urls:{direct:url},seekable:true,duration:s.duration,art:s.art,poster:s.art,playlist:{current:0,items:[{itemId:s.id,epIndex:0,title:s.title,artist:s.artist}]},audioTracks:[],subtitleTracks:[],episodes:s.video?[{index:0,name:s.title,title:s.title}]:[],totalEpisodes:1}}
       case '/api/lyrics': {
         const song=onlineTracks.get(u.searchParams.get('item'))||tracks().find(s=>s.id===u.searchParams.get('item'));
         if(!song)throw new Error('歌曲不存在，请重新选择歌曲');
@@ -61,8 +62,23 @@ window.Lingjing = (()=>{
       case '/api/item':{const item=items().find(s=>s.id===u.searchParams.get('id'));if(!item)throw new Error('歌曲不存在');return {ok:true,item,meta:item.meta||{},episodes:item.episodes||[],progress:item.progress||null,similar:[]}}
       case '/api/music/metadata': {const path=opts.method==='POST'?body.itemId:u.searchParams.get('item');const s=tracks().find(s=>s.id===path);if(!s)throw new Error('歌曲不存在');if(opts.method!=='POST')return {ok:true,title:s.title,artist:s.artist,album:s.album,cover:s.cover||''};await call('edit_metadata',{path:s.path,title:body.title,artist:body.artist,album:body.album,cover:body.cover||''});await reload();return {ok:true,song:tracks().find(t=>t.id===path)}}
       case '/api/progress':return {ok:true};
-      case '/api/scan':library=await call('rescan');return {ok:true};
-      case '/api/scan/status':return {ok:true,scanning:false,enriching:false};
+      case '/api/scan': {
+        if(scanning) throw new Error('正在扫描，请稍候');
+        scanning=true;
+        scanMessage='';
+        try {
+          const before = new Map(library.songs.map(s => [s.path,s.stamp]));
+          library = await call('rescan',{sourceId:body.sourceId || null});
+          const after = new Set(library.songs.map(s => s.path));
+          const added = library.songs.filter(s => !before.has(s.path)).length;
+          const changed = library.songs.filter(s => before.get(s.path) && before.get(s.path)!==s.stamp).length;
+          const removed = [...before.keys()].filter(path => !after.has(path)).length;
+          scanMessage = '扫描完成，新增 ' + added + ' 首，移除 ' + removed + ' 首，变更 ' + changed + ' 首';
+          if(library.warnings.length) scanMessage += '，' + library.warnings[0];
+          return {ok:true};
+        } finally { scanning=false; }
+      }
+      case '/api/scan/status':return {ok:true,scanning,enriching:false,msg:scanMessage};
       case '/api/login':{const host=body.host.replace(/^https?:\/\//,'').replace(/\/$/,'');server={host,port:body.port||(body.https?5001:5000),https:body.https===true,account:body.account};await call('connect_nas',{base:`${server.https?'https':'http'}://${host}:${server.port}`,account:body.account,password:body.password,otp:body.otp||''});connected=true;return {ok:true,hostname:server.host}}
       case '/api/logout':await call('disconnect_nas');connected=false;return {ok:true};
       case '/api/browse':return call('browse_nas',{path:u.searchParams.get('path')||''});
